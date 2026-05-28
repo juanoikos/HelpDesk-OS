@@ -3,7 +3,7 @@ import { router, protectedProcedure } from "../trpc";
 import { prisma } from "@helpdesk-os/db";
 import { TRPCError } from "@trpc/server";
 
-// ─── Forma del objeto de configuración ───────────────────────────────────────
+// ─── Schema de configuración (validación server-side) ─────────────────────────
 
 const configSchema = z.object({
   categories: z
@@ -14,75 +14,7 @@ const configSchema = z.object({
   summary: z.string(),
 });
 
-export type WizardConfig = z.infer<typeof configSchema>;
-
-// ─── Templates predefinidos (Opción B) ───────────────────────────────────────
-
-export const TEMPLATES: Record<string, { label: string; icon: string; config: WizardConfig }> = {
-  "soporte-ti": {
-    label: "Soporte TI",
-    icon: "🖥️",
-    config: {
-      categories: [
-        { name: "Hardware", color: "#3b82f6" },
-        { name: "Software", color: "#8b5cf6" },
-        { name: "Redes", color: "#10b981" },
-        { name: "Impresoras", color: "#f59e0b" },
-        { name: "Usuarios y Accesos", color: "#ef4444" },
-        { name: "Servidores", color: "#06b6d4" },
-      ],
-      channels: ["email"],
-      summary: "Configuración estándar para empresas de soporte TI.",
-    },
-  },
-  "ecommerce": {
-    label: "E-commerce",
-    icon: "🛒",
-    config: {
-      categories: [
-        { name: "Pedidos", color: "#3b82f6" },
-        { name: "Envíos y Logística", color: "#10b981" },
-        { name: "Pagos y Facturación", color: "#f59e0b" },
-        { name: "Devoluciones", color: "#ef4444" },
-        { name: "Consultas Generales", color: "#8b5cf6" },
-      ],
-      channels: ["email", "whatsapp"],
-      summary: "Configuración para tiendas en línea con soporte multicanal.",
-    },
-  },
-  "salud": {
-    label: "Salud / Clínica",
-    icon: "🏥",
-    config: {
-      categories: [
-        { name: "Citas y Agenda", color: "#10b981" },
-        { name: "Facturación", color: "#f59e0b" },
-        { name: "Urgencias", color: "#ef4444" },
-        { name: "Consultas Médicas", color: "#3b82f6" },
-        { name: "Medicamentos", color: "#8b5cf6" },
-      ],
-      channels: ["email", "whatsapp"],
-      summary: "Configuración para clínicas y consultorios médicos.",
-    },
-  },
-  "educacion": {
-    label: "Educación",
-    icon: "🎓",
-    config: {
-      categories: [
-        { name: "Plataforma Virtual", color: "#3b82f6" },
-        { name: "Matrículas", color: "#10b981" },
-        { name: "Pagos y Becas", color: "#f59e0b" },
-        { name: "Soporte Académico", color: "#8b5cf6" },
-        { name: "Infraestructura TI", color: "#06b6d4" },
-      ],
-      channels: ["email"],
-      summary: "Configuración para instituciones educativas.",
-    },
-  },
-};
-
-// ─── Función de análisis con IA ───────────────────────────────────────────────
+// ─── Prompt para la IA ────────────────────────────────────────────────────────
 
 const AI_PROMPT = (description: string) => `Eres un asistente configurando un sistema de helpdesk de soporte TI. El usuario describió su empresa:
 
@@ -101,7 +33,9 @@ Reglas:
 - channels: siempre incluye "email"; agrega "whatsapp" solo si lo mencionan explícitamente
 - summary: 1-2 oraciones en español explicando cómo se configuró el sistema`;
 
-async function analyzeWithClaude(description: string): Promise<WizardConfig> {
+// ─── Funciones de IA ──────────────────────────────────────────────────────────
+
+async function analyzeWithClaude(description: string) {
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const message = await anthropic.messages.create({
@@ -114,7 +48,7 @@ async function analyzeWithClaude(description: string): Promise<WizardConfig> {
   return configSchema.parse(JSON.parse(clean));
 }
 
-async function analyzeWithGemini(description: string): Promise<WizardConfig> {
+async function analyzeWithGemini(description: string) {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
   const model = genai.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -127,13 +61,13 @@ async function analyzeWithGemini(description: string): Promise<WizardConfig> {
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 export const wizardRouter = router({
-  // Devuelve qué proveedores de IA están disponibles
+  // Qué proveedores de IA están disponibles (según env vars)
   availableProviders: protectedProcedure.query(() => ({
     claude: !!process.env.ANTHROPIC_API_KEY,
     gemini: !!process.env.GEMINI_API_KEY,
   })),
 
-  // Análisis con IA (Claude o Gemini según el proveedor elegido)
+  // Análisis con IA
   analyze: protectedProcedure
     .input(
       z.object({
@@ -161,7 +95,7 @@ export const wizardRouter = router({
       }
     }),
 
-  // Guarda la configuración confirmada
+  // Guarda la configuración confirmada en la BD
   saveConfig: protectedProcedure
     .input(configSchema)
     .mutation(async ({ input, ctx }) => {

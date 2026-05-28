@@ -1,7 +1,7 @@
 "use client";
 
 import { trpc } from "@/trpc/react";
-import { TEMPLATES, type WizardConfig } from "@/server/routers/wizard";
+import { TEMPLATES, type WizardConfig } from "@/lib/wizard-config";
 import { useState } from "react";
 import Link from "next/link";
 
