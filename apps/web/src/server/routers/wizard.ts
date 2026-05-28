@@ -88,9 +88,11 @@ export const wizardRouter = router({
         }
       } catch (err) {
         if (err instanceof TRPCError) throw err;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[wizard] Error de IA:", msg);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "No se pudo procesar la respuesta de la IA. Intenta de nuevo.",
+          message: `Error de IA: ${msg}`,
         });
       }
     }),
