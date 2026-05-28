@@ -5,16 +5,23 @@ import { TEMPLATES, type WizardConfig } from "@/lib/wizard-config";
 import { useState } from "react";
 import Link from "next/link";
 
-type Method = "claude" | "gemini" | "template" | null;
+type Method = "claude" | "template" | null;
+
+// ─── Canales disponibles ──────────────────────────────────────────────────────
+
+const ALL_CHANNELS = [
+  { id: "email",     icon: "📧", label: "Email",     description: "Tickets por correo electrónico" },
+  { id: "whatsapp",  icon: "💬", label: "WhatsApp",  description: "Tickets por WhatsApp (Baileys)" },
+];
 
 // ─── Selector de método ───────────────────────────────────────────────────────
 
 function StepMethod({
   onSelect,
-  providers,
+  claudeAvailable,
 }: {
   onSelect: (m: Method) => void;
-  providers: { claude: boolean; gemini: boolean };
+  claudeAvailable: boolean;
 }) {
   return (
     <div className="max-w-2xl mx-auto">
@@ -25,7 +32,7 @@ function StepMethod({
       <div className="grid gap-4">
         <button
           onClick={() => onSelect("claude")}
-          disabled={!providers.claude}
+          disabled={!claudeAvailable}
           className="bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed border border-slate-700 rounded-2xl p-5 text-left transition-colors"
         >
           <div className="flex items-start gap-4">
@@ -35,27 +42,8 @@ function StepMethod({
               <p className="text-slate-400 text-sm mt-0.5">
                 Escribe en tus palabras qué hace tu empresa y Claude propone la configuración.
               </p>
-              {!providers.claude && (
+              {!claudeAvailable && (
                 <p className="text-amber-400 text-xs mt-1">Requiere ANTHROPIC_API_KEY en .env.local</p>
-              )}
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => onSelect("gemini")}
-          disabled={!providers.gemini}
-          className="bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed border border-slate-700 rounded-2xl p-5 text-left transition-colors"
-        >
-          <div className="flex items-start gap-4">
-            <span className="text-2xl">✨</span>
-            <div>
-              <p className="text-white font-semibold">Describir con Gemini (Google) — Gratis</p>
-              <p className="text-slate-400 text-sm mt-0.5">
-                Igual que Claude pero usando la API gratuita de Google.
-              </p>
-              {!providers.gemini && (
-                <p className="text-amber-400 text-xs mt-1">Requiere GEMINI_API_KEY en .env.local</p>
               )}
             </div>
           </div>
@@ -81,23 +69,20 @@ function StepMethod({
   );
 }
 
-// ─── Paso: Formulario de descripción (Claude / Gemini) ────────────────────────
+// ─── Paso: Formulario de descripción (Claude) ─────────────────────────────────
 
 function StepDescribe({
-  provider,
   onAnalyze,
   onBack,
   loading,
   error,
 }: {
-  provider: "claude" | "gemini";
   onAnalyze: (description: string) => void;
   onBack: () => void;
   loading: boolean;
   error?: string;
 }) {
   const [text, setText] = useState("");
-  const label = provider === "claude" ? "Claude" : "Gemini";
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -105,9 +90,9 @@ function StepDescribe({
         <button onClick={onBack} className="text-slate-500 hover:text-slate-300 text-sm mb-4 block">
           ← Cambiar método
         </button>
-        <h1 className="text-2xl font-bold text-white mb-2">Describir con {label}</h1>
+        <h1 className="text-2xl font-bold text-white mb-2">Describir con Claude</h1>
         <p className="text-slate-400">
-          Describe tu empresa y {label} propondrá la configuración inicial.
+          Describe tu empresa y Claude propondrá la configuración inicial.
         </p>
       </div>
       <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6">
@@ -132,7 +117,7 @@ function StepDescribe({
           disabled={loading || text.length < 20}
           className="mt-5 w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl transition-colors text-sm flex items-center justify-center gap-2"
         >
-          {loading ? <><span className="animate-spin inline-block">⟳</span> Analizando...</> : `✨ Analizar con ${label}`}
+          {loading ? <><span className="animate-spin inline-block">⟳</span> Analizando...</> : "✨ Analizar con Claude"}
         </button>
       </div>
     </div>
@@ -185,16 +170,26 @@ function StepReview({
   loading,
 }: {
   config: WizardConfig;
-  onConfirm: () => void;
+  onConfirm: (final: WizardConfig) => void;
   onBack: () => void;
   loading: boolean;
 }) {
+  const [channels, setChannels] = useState<string[]>(config.channels);
+
+  const toggleChannel = (id: string) => {
+    setChannels((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+    );
+  };
+
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-white mb-2">Configuración propuesta</h1>
         <p className="text-slate-400 text-sm">{config.summary}</p>
       </div>
+
+      {/* Categorías */}
       <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 mb-4">
         <h2 className="text-white font-semibold mb-4">Categorías de tickets ({config.categories.length})</h2>
         <div className="grid grid-cols-2 gap-2">
@@ -206,21 +201,56 @@ function StepReview({
           ))}
         </div>
       </div>
+
+      {/* Canales — selección manual */}
       <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 mb-6">
-        <h2 className="text-white font-semibold mb-4">Canales de comunicación</h2>
-        <div className="flex gap-2 flex-wrap">
-          {config.channels.map((ch) => (
-            <span key={ch} className="bg-slate-800 text-slate-300 text-sm px-3 py-1.5 rounded-lg">
-              {ch === "email" ? "📧 Email" : ch === "whatsapp" ? "💬 WhatsApp" : ch}
-            </span>
-          ))}
+        <h2 className="text-white font-semibold mb-1">Canales de comunicación</h2>
+        <p className="text-slate-500 text-xs mb-4">Activa o desactiva los canales que quieras usar.</p>
+        <div className="grid grid-cols-2 gap-3">
+          {ALL_CHANNELS.map((ch) => {
+            const active = channels.includes(ch.id);
+            return (
+              <button
+                key={ch.id}
+                onClick={() => toggleChannel(ch.id)}
+                className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${
+                  active
+                    ? "border-blue-500 bg-blue-950"
+                    : "border-slate-700 bg-slate-800 opacity-50"
+                }`}
+              >
+                <span className="text-xl mt-0.5">{ch.icon}</span>
+                <div>
+                  <p className={`font-medium text-sm ${active ? "text-white" : "text-slate-400"}`}>
+                    {ch.label}
+                  </p>
+                  <p className="text-slate-500 text-xs mt-0.5">{ch.description}</p>
+                </div>
+                <span className={`ml-auto text-xs font-semibold ${active ? "text-blue-400" : "text-slate-600"}`}>
+                  {active ? "✓ Activo" : "Inactivo"}
+                </span>
+              </button>
+            );
+          })}
         </div>
+        {channels.length === 0 && (
+          <p className="text-amber-400 text-xs mt-3">⚠ Activa al menos un canal de comunicación.</p>
+        )}
       </div>
+
       <div className="flex gap-3">
-        <button onClick={onBack} disabled={loading} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-3 rounded-xl transition-colors text-sm">
+        <button
+          onClick={onBack}
+          disabled={loading}
+          className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-3 rounded-xl transition-colors text-sm"
+        >
           ← Volver
         </button>
-        <button onClick={onConfirm} disabled={loading} className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl transition-colors text-sm">
+        <button
+          onClick={() => onConfirm({ ...config, channels })}
+          disabled={loading || channels.length === 0}
+          className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl transition-colors text-sm"
+        >
           {loading ? "Guardando..." : "✓ Confirmar y guardar"}
         </button>
       </div>
@@ -269,7 +299,7 @@ export default function WizardPage() {
     return (
       <StepReview
         config={config}
-        onConfirm={() => save.mutate(config)}
+        onConfirm={(final) => save.mutate(final)}
         onBack={() => setConfig(null)}
         loading={save.isPending}
       />
@@ -280,11 +310,10 @@ export default function WizardPage() {
     return <StepTemplate onSelect={setConfig} onBack={() => setMethod(null)} />;
   }
 
-  if (method === "claude" || method === "gemini") {
+  if (method === "claude") {
     return (
       <StepDescribe
-        provider={method}
-        onAnalyze={(description) => analyze.mutate({ description, provider: method })}
+        onAnalyze={(description) => analyze.mutate({ description, provider: "claude" })}
         onBack={() => setMethod(null)}
         loading={analyze.isPending}
         error={analyze.error?.message}
@@ -295,7 +324,7 @@ export default function WizardPage() {
   return (
     <StepMethod
       onSelect={setMethod}
-      providers={providers ?? { claude: false, gemini: false }}
+      claudeAvailable={providers?.claude ?? false}
     />
   );
 }
