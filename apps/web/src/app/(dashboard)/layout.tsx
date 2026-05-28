@@ -1,6 +1,7 @@
 import { auth, signOut } from "@/auth";
 import { redirect } from "next/navigation";
 import { TRPCProvider } from "@/trpc/provider";
+import Link from "next/link";
 
 export default async function DashboardLayout({
   children,
@@ -33,6 +34,10 @@ export default async function DashboardLayout({
           </div>
 
           <div className="flex items-center gap-4">
+            <Link href="/settings" className="text-slate-400 hover:text-white text-sm transition-colors">
+              ⚙ Configuración
+            </Link>
+            <span className="text-slate-600">|</span>
             <span className="text-slate-400 text-sm">{session.user.name}</span>
             <form action={handleSignOut}>
               <button
