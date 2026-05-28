@@ -1,0 +1,14 @@
+{
+  "name": "@helpdesk-os/workers",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsx": "^4",
+    "typescript": "^5"
+  }
+}

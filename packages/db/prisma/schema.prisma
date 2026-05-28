@@ -1,0 +1,201 @@
+// HelpDesk OS — Esquema de Base de Datos
+// Bloque 1: Tablas base del sistema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Tenants (Empresas) ───────────────────────────────────────────────────────
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique // ej: "altra" → helpdesk.altra.com
+  domain    String?           // dominio propio (opcional)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users      User[]
+  tickets    Ticket[]
+  assets     Asset[]
+  categories Category[]
+  channels   Channel[]
+
+  @@map("tenants")
+}
+
+// ─── Usuarios ─────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  tenantId  String
+  email     String
+  name      String
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id])
+  ticketsCreated  Ticket[]        @relation("CreatedBy")
+  ticketsAssigned Ticket[]        @relation("AssignedTo")
+  messages        TicketMessage[]
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN  // administra el sistema
+  AGENT  // atiende tickets
+  USER   // usuario final que crea tickets
+}
+
+// ─── Tickets ──────────────────────────────────────────────────────────────────
+
+model Ticket {
+  id           String       @id @default(cuid())
+  tenantId     String
+  number       Int          // número visible: #001, #002...
+  title        String
+  status       TicketStatus @default(OPEN)
+  priority     Priority     @default(MEDIUM)
+  categoryId   String?
+  createdById  String
+  assignedToId String?
+  assetId      String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  closedAt     DateTime?
+
+  tenant     Tenant          @relation(fields: [tenantId], references: [id])
+  category   Category?       @relation(fields: [categoryId], references: [id])
+  createdBy  User            @relation("CreatedBy", fields: [createdById], references: [id])
+  assignedTo User?           @relation("AssignedTo", fields: [assignedToId], references: [id])
+  asset      Asset?          @relation(fields: [assetId], references: [id])
+  messages   TicketMessage[]
+
+  @@unique([tenantId, number])
+  @@map("tickets")
+}
+
+enum TicketStatus {
+  OPEN        // abierto
+  IN_PROGRESS // en progreso
+  WAITING     // esperando respuesta del usuario
+  RESOLVED    // resuelto
+  CLOSED      // cerrado
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// ─── Mensajes de Ticket ───────────────────────────────────────────────────────
+
+model TicketMessage {
+  id         String         @id @default(cuid())
+  ticketId   String
+  userId     String?
+  body       String
+  channel    MessageChannel @default(WEB)
+  isInternal Boolean        @default(false) // nota interna, no visible al usuario
+  createdAt  DateTime       @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@map("ticket_messages")
+}
+
+enum MessageChannel {
+  WEB       // portal web
+  EMAIL     // correo
+  WHATSAPP  // WhatsApp
+  PHONE     // llamada (registro manual)
+}
+
+// ─── Activos / Inventario ─────────────────────────────────────────────────────
+
+model Asset {
+  id           String      @id @default(cuid())
+  tenantId     String
+  name         String
+  type         AssetType
+  serialNumber String?
+  brand        String?
+  model        String?
+  status       AssetStatus @default(ACTIVE)
+  purchasedAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id])
+  tickets Ticket[]
+
+  @@map("assets")
+}
+
+enum AssetType {
+  LAPTOP
+  DESKTOP
+  MONITOR
+  PHONE
+  PRINTER
+  SERVER
+  NETWORK
+  OTHER
+}
+
+enum AssetStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+  RETIRED
+}
+
+// ─── Categorías ───────────────────────────────────────────────────────────────
+
+model Category {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  color     String?  // hex color para la UI
+  createdAt DateTime @default(now())
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id])
+  tickets Ticket[]
+
+  @@unique([tenantId, name])
+  @@map("categories")
+}
+
+// ─── Canales de Comunicación ──────────────────────────────────────────────────
+
+model Channel {
+  id        String      @id @default(cuid())
+  tenantId  String
+  type      ChannelType
+  config    Json        // config específica por tipo
+  isActive  Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, type])
+  @@map("channels")
+}
+
+enum ChannelType {
+  EMAIL
+  WHATSAPP_BAILEYS
+  WHATSAPP_META
+}

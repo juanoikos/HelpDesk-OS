@@ -1,0 +1,12 @@
+{
+  "name": "@helpdesk-os/types",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}
