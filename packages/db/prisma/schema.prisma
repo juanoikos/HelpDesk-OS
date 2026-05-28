@@ -36,9 +36,10 @@ model User {
   tenantId  String
   email     String
   name      String
-  role      UserRole @default(USER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  role         UserRole @default(USER)
+  passwordHash String?           // null para usuarios creados por admin sin contraseña aún
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   tenant          Tenant          @relation(fields: [tenantId], references: [id])
   ticketsCreated  Ticket[]        @relation("CreatedBy")
