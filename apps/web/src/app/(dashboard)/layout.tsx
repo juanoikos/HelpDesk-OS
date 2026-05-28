@@ -1,6 +1,6 @@
-import { auth } from "@/auth";
-import { signOut } from "@/auth";
+import { auth, signOut } from "@/auth";
 import { redirect } from "next/navigation";
+import { TRPCProvider } from "@/trpc/provider";
 
 export default async function DashboardLayout({
   children,
@@ -46,8 +46,10 @@ export default async function DashboardLayout({
         </div>
       </header>
 
-      {/* Content */}
-      <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
+      {/* tRPC + React Query disponibles en todas las páginas del dashboard */}
+      <TRPCProvider>
+        <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
+      </TRPCProvider>
     </div>
   );
 }
