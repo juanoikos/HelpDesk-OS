@@ -17,6 +17,7 @@ const CHANNEL_INFO: Record<string, { label: string; icon: string; description: s
   WHATSAPP_BAILEYS: { label: "WhatsApp (Informal)",   icon: "💬", description: "Número personal de WhatsApp — sin cuenta Business" },
   WHATSAPP_META:    { label: "WhatsApp Business API", icon: "✅", description: "API oficial de Meta — requiere cuenta Business verificada" },
   PHONE:            { label: "Llamada telefónica",    icon: "📞", description: "Tickets creados a partir de llamadas entrantes" },
+  TEAMS:            { label: "Microsoft Teams",       icon: "🟦", description: "Recibe y gestiona tickets desde canales de Teams" },
 };
 
 const USER_VIEW_FIELDS = [
@@ -652,7 +653,7 @@ function ChannelsSection() {
                 <p className="text-slate-200 font-medium text-sm">{info.label}</p>
                 <p className="text-slate-500 text-xs mt-0.5">{info.description}</p>
               </div>
-              <button onClick={() => toggle.mutate({ type: type as "EMAIL" | "WHATSAPP_BAILEYS" | "WHATSAPP_META" | "PHONE", active: !active })}
+              <button onClick={() => toggle.mutate({ type: type as "EMAIL" | "WHATSAPP_BAILEYS" | "WHATSAPP_META" | "PHONE" | "TEAMS", active: !active })}
                 disabled={toggle.isPending}
                 className={`text-sm font-medium px-4 py-1.5 rounded-lg transition-colors ${active ? "bg-green-900 text-green-400 hover:bg-red-900 hover:text-red-400" : "bg-slate-700 text-slate-400 hover:bg-green-900 hover:text-green-400"}`}>
                 {active ? "Activo" : "Inactivo"}

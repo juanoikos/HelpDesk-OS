@@ -259,6 +259,7 @@ enum ChannelType {
   WHATSAPP_BAILEYS
   WHATSAPP_META
   PHONE
+  TEAMS
 }
 
 // ─── Configuración del tenant ─────────────────────────────────────────────────
