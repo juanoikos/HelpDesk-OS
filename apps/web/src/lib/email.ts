@@ -20,6 +20,11 @@ function num(n: number) {
   return `#${String(n).padStart(3, "0")}`;
 }
 
+function subject(t: { number: number; requesterName?: string | null; createdBy: { name: string } }, rest: string) {
+  const who = t.requesterName ?? t.createdBy.name;
+  return `HelpDesk OS ${num(t.number)} (${who}) — ${rest}`;
+}
+
 // ─── Plantilla base (tabla compatible con clientes de email) ──────────────────
 
 function baseHtml(content: string) {
@@ -206,7 +211,7 @@ export async function notifyTicketCreated(t: TicketBasic) {
     sends.push(resend.emails.send({
       from: FROM,
       to: toRequester,
-      subject: `${num(t.number)} Tu solicitud fue registrada — ${t.title}`,
+      subject: subject(t, `Tu solicitud fue registrada — ${t.title}`),
       html: baseHtml(`
         <h2 style="color:#f1f5f9;font-size:20px;font-weight:700;margin:0 0 8px">¡Recibimos tu solicitud!</h2>
         <p style="color:#94a3b8;font-size:14px;margin:0 0 4px;line-height:1.6">
@@ -224,7 +229,7 @@ export async function notifyTicketCreated(t: TicketBasic) {
     sends.push(resend.emails.send({
       from: FROM,
       to: t.assignedTo.email,
-      subject: `${num(t.number)} Ticket asignado — ${t.title}`,
+      subject: subject(t, `Ticket asignado — ${t.title}`),
       html: baseHtml(`
         <h2 style="color:#f1f5f9;font-size:20px;font-weight:700;margin:0 0 8px">Se te asignó un ticket</h2>
         <p style="color:#94a3b8;font-size:14px;margin:0 0 4px;line-height:1.6">
@@ -256,7 +261,7 @@ export async function notifyStatusChanged(t: TicketBasic, newStatus: string) {
   await resend.emails.send({
     from: FROM,
     to,
-    subject: `${num(t.number)} Estado actualizado: ${STATUS_LABEL[newStatus] ?? newStatus} — ${t.title}`,
+    subject: subject(t, `Estado actualizado: ${STATUS_LABEL[newStatus] ?? newStatus} — ${t.title}`),
     html: baseHtml(`
       <h2 style="color:#f1f5f9;font-size:20px;font-weight:700;margin:0 0 8px">Estado de tu ticket actualizado</h2>
       <p style="color:#94a3b8;font-size:14px;margin:0 0 4px;line-height:1.6">
@@ -278,7 +283,7 @@ export async function notifyNewReply(t: TicketBasic, replyBody: string, agentNam
   await resend.emails.send({
     from: FROM,
     to,
-    subject: `${num(t.number)} Nueva respuesta — ${t.title}`,
+    subject: subject(t, `Nueva respuesta — ${t.title}`),
     html: baseHtml(`
       <h2 style="color:#f1f5f9;font-size:20px;font-weight:700;margin:0 0 8px">Tienes una nueva respuesta</h2>
       <p style="color:#94a3b8;font-size:14px;margin:0 0 4px;line-height:1.6">
@@ -316,7 +321,7 @@ export async function notifyAgentActivity(
   await resend.emails.send({
     from: FROM,
     to: t.assignedTo.email,
-    subject: `${num(t.number)} ${label} de ${authorName} — ${t.title}`,
+    subject: subject(t, `${label} de ${authorName} — ${t.title}`),
     html: baseHtml(`
       <h2 style="color:#f1f5f9;font-size:20px;font-weight:700;margin:0 0 8px">Nueva actividad en tu ticket</h2>
       <p style="color:#94a3b8;font-size:14px;margin:0 0 4px;line-height:1.6">
@@ -346,7 +351,7 @@ export async function notifyResolved(t: TicketBasic, solution: string) {
   await resend.emails.send({
     from: FROM,
     to,
-    subject: `${num(t.number)} ✓ Tu ticket fue resuelto — ${t.title}`,
+    subject: subject(t, `✓ Ticket resuelto — ${t.title}`),
     html: baseHtml(`
       <h2 style="color:#4ade80;font-size:20px;font-weight:700;margin:0 0 8px">✓ Tu ticket fue resuelto</h2>
       <p style="color:#94a3b8;font-size:14px;margin:0 0 4px;line-height:1.6">
