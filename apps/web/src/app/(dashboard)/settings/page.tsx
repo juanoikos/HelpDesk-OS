@@ -359,6 +359,7 @@ function TeamSection() {
   const deleteGroup  = trpc.teams.groups.delete.useMutation({ onSuccess: () => utils.teams.groups.list.invalidate(), onError: (e) => alert(e.message) });
   const addMember    = trpc.teams.groups.addMember.useMutation({ onSuccess: () => utils.teams.members.list.invalidate() });
   const removeMember = trpc.teams.groups.removeMember.useMutation({ onSuccess: () => utils.teams.members.list.invalidate() });
+  const updateRole   = trpc.teams.members.updateRole.useMutation({ onSuccess: () => utils.teams.members.list.invalidate(), onError: (e) => alert(e.message) });
 
   const [showInvite, setShowInvite] = useState(false);
   const [inviteName, setInviteName] = useState("");
@@ -462,8 +463,25 @@ function TeamSection() {
                     </tr>
                     {expandMemberId === m.id && (
                       <tr className="border-t border-slate-800 bg-slate-900/50">
-                        <td colSpan={5} className="px-6 py-3">
-                          <p className="text-slate-500 text-xs mb-2">Haz clic en un grupo para asignar o quitar:</p>
+                        <td colSpan={5} className="px-6 py-3 space-y-3">
+                          {/* Cambiar rol */}
+                          <div>
+                            <p className="text-slate-500 text-xs mb-2">Rol del usuario:</p>
+                            <div className="flex gap-2">
+                              {(["AGENT", "ADMIN"] as const).map((r) => (
+                                <button key={r}
+                                  onClick={() => updateRole.mutate({ userId: m.id, role: r })}
+                                  disabled={m.role === r || updateRole.isPending}
+                                  className={`text-xs px-3 py-1.5 rounded-lg font-medium border transition-colors ${m.role === r
+                                    ? r === "ADMIN" ? "bg-purple-900/60 text-purple-300 border-purple-800 cursor-default" : "bg-blue-900/60 text-blue-300 border-blue-800 cursor-default"
+                                    : "bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-500"}`}>
+                                  {r === "ADMIN" ? "👑 Administrador" : "🎧 Agente"}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Asignar grupos */}
+                          <p className="text-slate-500 text-xs mb-2">Grupos de trabajo:</p>
                           <div className="flex flex-wrap gap-2">
                             {loadingGroups ? (
                               <span className="text-slate-500 text-xs">Cargando grupos...</span>

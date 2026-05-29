@@ -214,6 +214,22 @@ const membersRouter = router({
       orderBy: { name: "asc" },
     });
   }),
+
+  updateRole: protectedProcedure
+    .input(z.object({
+      userId: z.string(),
+      role:   z.enum(["AGENT", "ADMIN"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      if (input.userId === ctx.session.user.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No puedes cambiar tu propio rol" });
+      }
+      return prisma.user.update({
+        where: { id: input.userId, tenantId: ctx.session.user.tenantId },
+        data:  { role: input.role },
+      });
+    }),
 });
 
 // ─── Main teams router ────────────────────────────────────────────────────────
