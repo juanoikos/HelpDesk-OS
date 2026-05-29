@@ -177,7 +177,11 @@ export default function TicketsPage() {
               {tickets.map((ticket) => (
                 <tr
                   key={ticket.id}
-                  className="border-b border-slate-800 last:border-0 hover:bg-slate-800/40 transition-colors"
+                  className={`border-b border-slate-800 last:border-0 transition-colors ${
+                    ticket.status === "CLOSED"
+                      ? "bg-slate-800/60 opacity-60 hover:opacity-80"
+                      : "hover:bg-slate-800/40"
+                  }`}
                 >
                   <td className="px-5 py-4">
                     <Link href={`/tickets/${ticket.id}`} className="font-mono text-slate-500 text-sm hover:text-slate-300">
