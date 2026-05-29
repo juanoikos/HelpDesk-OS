@@ -183,6 +183,20 @@ export const ticketsRouter = router({
   updateStatus: protectedProcedure
     .input(z.object({ id: z.string(), status: statusEnum }))
     .mutation(async ({ input, ctx }) => {
+      // Cerrar un ticket sin solución está prohibido (base de conocimiento)
+      if (input.status === "CLOSED") {
+        const existing = await prisma.ticket.findFirst({
+          where:  { id: input.id, tenantId: ctx.session.user.tenantId },
+          select: { solution: true },
+        });
+        if (!existing?.solution) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Debes registrar una solución antes de cerrar el ticket.",
+          });
+        }
+      }
+
       const ticket = await prisma.ticket.update({
         where: { id: input.id, tenantId: ctx.session.user.tenantId },
         data: {

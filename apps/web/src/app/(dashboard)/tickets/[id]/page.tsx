@@ -110,10 +110,11 @@ export default function TicketDetailPage() {
     onSuccess: () => { setReply(""); invalidate(); },
   });
 
-  const [reply,      setReply]      = useState("");
-  const [isInternal, setIsInternal] = useState(false);
-  const [solution,   setSolution]   = useState("");
+  const [reply,        setReply]        = useState("");
+  const [isInternal,   setIsInternal]   = useState(false);
+  const [solution,     setSolution]     = useState("");
   const [showSolution, setShowSolution] = useState(false);
+  const [closeWarning, setCloseWarning] = useState(false);
 
   if (isLoading) return <div className="text-slate-500 text-sm py-16 text-center">Cargando ticket...</div>;
   if (!ticket)   return (
@@ -187,19 +188,45 @@ export default function TicketDetailPage() {
         <div>
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Estado</p>
           <div className="flex flex-wrap gap-1.5">
-            {STATUS_OPTIONS.map((opt) => (
-              <button key={opt.value}
-                onClick={() => updateStatus.mutate({ id: ticketId, status: opt.value as "NEW"|"ASSIGNED"|"IN_DIAGNOSIS"|"IN_ANALYSIS"|"IN_PROGRESS"|"WAITING"|"PENDING_USER"|"PENDING_PROVIDER"|"ESCALATED"|"RESOLVED"|"CLOSED" })}
-                disabled={updateStatus.isPending}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                  ticket.status === opt.value
-                    ? STATUS_CONFIG[opt.value]?.badge
-                    : "border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200"
-                }`}>
-                {opt.label}
-              </button>
-            ))}
+            {STATUS_OPTIONS.map((opt) => {
+              const needsSolution = opt.value === "CLOSED" && !ticket.solution;
+              return (
+                <button key={opt.value}
+                  onClick={() => {
+                    if (needsSolution) { setCloseWarning(true); return; }
+                    setCloseWarning(false);
+                    updateStatus.mutate({ id: ticketId, status: opt.value as "NEW"|"ASSIGNED"|"IN_DIAGNOSIS"|"IN_ANALYSIS"|"IN_PROGRESS"|"WAITING"|"PENDING_USER"|"PENDING_PROVIDER"|"ESCALATED"|"RESOLVED"|"CLOSED" });
+                  }}
+                  disabled={updateStatus.isPending}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    ticket.status === opt.value
+                      ? STATUS_CONFIG[opt.value]?.badge
+                      : needsSolution
+                        ? "border-slate-700 text-slate-600 cursor-not-allowed"
+                        : "border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200"
+                  }`}>
+                  {opt.label}
+                </button>
+              );
+            })}
           </div>
+          {/* Aviso: solución obligatoria para cerrar */}
+          {closeWarning && (
+            <div className="mt-2 flex items-start gap-2 bg-amber-950/50 border border-amber-800/50 rounded-xl px-3 py-2.5">
+              <span className="text-amber-400 text-sm flex-shrink-0">⚠</span>
+              <div>
+                <p className="text-amber-300 text-xs font-medium">Se requiere solución para cerrar el ticket</p>
+                <p className="text-amber-500 text-xs mt-0.5">
+                  Registra la solución primero — esto alimenta la base de conocimiento que usará la IA para sugerir diagnósticos.
+                </p>
+                <button
+                  onClick={() => { setShowSolution(true); setCloseWarning(false); }}
+                  className="mt-2 text-xs text-amber-400 underline hover:text-amber-300">
+                  Ir a registrar solución →
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Asignar + Prioridad/Impacto en la misma fila */}
