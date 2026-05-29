@@ -21,16 +21,26 @@ export default async function DashboardLayout({
       {/* Header */}
       <header className="bg-slate-900 border-b border-slate-800 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-              <span className="text-white text-sm font-bold">H</span>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+                <span className="text-white text-sm font-bold">H</span>
+              </div>
+              <div>
+                <span className="text-white font-semibold text-sm">HelpDesk OS</span>
+                <span className="text-slate-500 text-xs ml-2">
+                  {session.user.tenantName}
+                </span>
+              </div>
             </div>
-            <div>
-              <span className="text-white font-semibold text-sm">HelpDesk OS</span>
-              <span className="text-slate-500 text-xs ml-2">
-                {session.user.tenantName}
-              </span>
-            </div>
+            <nav className="flex items-center gap-1">
+              <Link href="/tickets" className="text-slate-400 hover:text-white hover:bg-slate-800 px-3 py-1.5 rounded-lg text-sm transition-colors">
+                🎫 Tickets
+              </Link>
+              <Link href="/dashboard" className="text-slate-400 hover:text-white hover:bg-slate-800 px-3 py-1.5 rounded-lg text-sm transition-colors">
+                📊 Dashboard
+              </Link>
+            </nav>
           </div>
 
           <div className="flex items-center gap-4">
