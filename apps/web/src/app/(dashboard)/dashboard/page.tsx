@@ -15,7 +15,7 @@ export default async function DashboardPage() {
 
   const [categoriesCount, openCount, inProgressCount, resolvedTodayCount] = await Promise.all([
     prisma.category.count({ where: { tenantId } }),
-    prisma.ticket.count({ where: { tenantId, status: { in: OPEN_STATUSES } } }),
+    prisma.ticket.count({ where: { tenantId, status: { in: [...OPEN_STATUSES] } } }),
     prisma.ticket.count({ where: { tenantId, status: "IN_PROGRESS" } }),
     prisma.ticket.count({ where: { tenantId, status: "RESOLVED", updatedAt: { gte: today } } }),
   ]);

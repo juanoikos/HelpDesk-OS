@@ -323,7 +323,7 @@ export default function NewTicketPage() {
 
 // ─── FORMULARIO USUARIO FINAL ─────────────────────────────────────────────────
 
-function UserForm({ create, categories }: { create: ReturnType<typeof trpc.tickets.create.useMutation>; categories: { id: string; name: string }[] | undefined }) {
+function UserForm({ create, categories: _categories }: { create: ReturnType<typeof trpc.tickets.create.useMutation>; categories: { id: string; name: string }[] | undefined }) {
   const [f, setF] = useState({
     type:            "",
     where:           "",
@@ -483,7 +483,7 @@ function UserForm({ create, categories }: { create: ReturnType<typeof trpc.ticke
 
 function TIForm({
   create,
-  categories,
+  categories: _categories,
   agents,
 }: {
   create:     ReturnType<typeof trpc.tickets.create.useMutation>;
