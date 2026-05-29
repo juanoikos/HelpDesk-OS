@@ -7,12 +7,13 @@ import {
   notifyStatusChanged,
   notifyNewReply,
   notifyResolved,
+  notifyAgentActivity,
 } from "@/lib/email";
 
 // ─── Selector reutilizable para emails ───────────────────────────────────────
 const WITH_EMAIL = {
   createdBy:  { select: { id: true, name: true, email: true } },
-  assignedTo: { select: { id: true, name: true, email: true } },
+  assignedTo: { select: { id: true, name: true, email: true } },  // id necesario para evitar auto-notificación
 } as const;
 
 // SLA en horas según prioridad
@@ -251,10 +252,16 @@ export const ticketsRouter = router({
         include: { user: { select: { id: true, name: true } } },
       });
 
+      const authorName = ctx.session.user.name ?? "Soporte";
+
       // Notificar respuesta pública al solicitante (fire-and-forget)
       if (!input.isInternal) {
-        const agentName = ctx.session.user.name ?? "Soporte";
-        notifyNewReply(ticket, input.body, agentName).catch(console.error);
+        notifyNewReply(ticket, input.body, authorName).catch(console.error);
+      }
+
+      // Notificar al agente asignado cuando no es él mismo quien escribe
+      if (ticket.assignedTo && ticket.assignedTo.id !== ctx.session.user.id) {
+        notifyAgentActivity(ticket, input.body, authorName, input.isInternal).catch(console.error);
       }
 
       return message;

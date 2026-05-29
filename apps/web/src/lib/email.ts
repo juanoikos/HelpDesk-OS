@@ -86,7 +86,7 @@ type TicketBasic = {
   status?: string;
   solution?: string | null;
   createdBy: { name: string; email: string };
-  assignedTo?: { name: string; email: string } | null;
+  assignedTo?: { id: string; name: string; email: string } | null;
   requesterContact?: string | null;
   requesterName?: string | null;
 };
@@ -200,7 +200,45 @@ export async function notifyNewReply(t: TicketBasic, replyBody: string, agentNam
   }).catch(console.error);
 }
 
-// ─── 4. Ticket resuelto ───────────────────────────────────────────────────────
+// ─── 4. Nueva actividad → agente asignado ────────────────────────────────────
+
+export async function notifyAgentActivity(
+  t: TicketBasic,
+  body: string,
+  authorName: string,
+  isInternal: boolean,
+) {
+  if (!t.assignedTo?.email) return;
+
+  const label    = isInternal ? "Nota interna" : "Respuesta";
+  const labelColor = isInternal ? "#a855f7" : "#3b82f6";
+  const noteStyle  = isInternal
+    ? "background:#1e1030;border-left:3px solid #a855f7;border-radius:0 8px 8px 0"
+    : "background:#0f172a;border-left:3px solid #2563eb;border-radius:0 8px 8px 0";
+
+  await resend.emails.send({
+    from: FROM,
+    to: t.assignedTo.email,
+    subject: `${num(t.number)} ${label} de ${authorName} — ${t.title}`,
+    html: baseHtml(`
+      <h2 style="color:#f1f5f9;font-size:20px;margin:0 0 8px">
+        Nueva actividad en tu ticket
+      </h2>
+      <p style="color:#94a3b8;font-size:14px;margin:0 0 4px">
+        Hola <strong style="color:#e2e8f0">${t.assignedTo.name}</strong>,
+        <strong style="color:#e2e8f0">${authorName}</strong> escribió
+        una <strong style="color:${labelColor}">${label.toLowerCase()}</strong>:
+      </p>
+      <div style="${noteStyle};padding:14px 18px;margin:16px 0;color:#cbd5e1;font-size:14px;white-space:pre-wrap">
+        ${body.replace(/</g, "&lt;").replace(/>/g, "&gt;")}
+      </div>
+      ${ticketCard(t)}
+      ${btn("Ver ticket", ticketUrl(t.id))}
+    `),
+  }).catch(console.error);
+}
+
+// ─── 5. Ticket resuelto ───────────────────────────────────────────────────────
 
 export async function notifyResolved(t: TicketBasic, solution: string) {
   const to = recipientEmail(t);
