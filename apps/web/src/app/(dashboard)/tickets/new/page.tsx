@@ -292,8 +292,6 @@ function F({ label, req, children }: { label: string; req?: boolean; children: R
 export default function NewTicketPage() {
   const router = useRouter();
   const { data: me }         = trpc.tickets.me.useQuery();
-  // categories de BD disponibles para futuro uso (filtros, validación)
-  const { data: _categories } = trpc.settings.listCategories.useQuery();
   const { data: agents }     = trpc.tickets.listAgents.useQuery();
 
   const create = trpc.tickets.create.useMutation({
