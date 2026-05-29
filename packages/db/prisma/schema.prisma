@@ -73,8 +73,11 @@ model Ticket {
   location       String?      // sede / ubicación
   affectedSystem String?      // sistema o aplicación afectada
   appVersion     String?      // versión de la aplicación
+  siteType         String?      // tipo de sede: OFFICE | POS
   requesterName    String?      // nombre del usuario que reportó el problema
   requesterContact String?      // email o teléfono del solicitante
+  equipmentName    String?      // equipo afectado: Desktop, Portátil, POS Principal, etc.
+  deviceType       String?      // componente: Pantalla, CPU, Impresora, etc.
   createdById    String
   assignedToId   String?
   assetId        String?

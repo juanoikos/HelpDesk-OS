@@ -67,6 +67,9 @@ export const ticketsRouter = router({
         assignedToId:     z.string().optional(),
         requesterName:    z.string().optional(),
         requesterContact: z.string().optional(),
+        siteType:         z.enum(["OFFICE", "POS"]).optional(),
+        equipmentName:    z.string().optional(),
+        deviceType:       z.string().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -104,6 +107,9 @@ export const ticketsRouter = router({
           slaDeadline,
           requesterName:    input.requesterName,
           requesterContact: input.requesterContact,
+          siteType:         input.siteType,
+          equipmentName:    input.equipmentName,
+          deviceType:       input.deviceType,
           messages: {
             create: {
               body:    input.body,

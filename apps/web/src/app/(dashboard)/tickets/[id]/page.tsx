@@ -325,11 +325,14 @@ export default function TicketDetailPage() {
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Detalles</h3>
             {[
-              { label: "Área",        value: ticket.area },
-              { label: "Sede",        value: ticket.location },
-              { label: "Sistema",     value: ticket.affectedSystem },
-              { label: "Versión",     value: ticket.appVersion },
-              { label: "Subcategoría", value: ticket.subcategory },
+              { label: "Tipo de sede",   value: ticket.siteType === "POS" ? "🏪 Punto de Venta" : ticket.siteType === "OFFICE" ? "🏢 Oficina Central" : null },
+              { label: "Área",           value: ticket.area },
+              { label: "Sede / Ubicación", value: ticket.location },
+              { label: "Equipo",         value: ticket.equipmentName },
+              { label: "Componente",     value: ticket.deviceType },
+              { label: "Sistema",        value: ticket.affectedSystem },
+              { label: "Versión",        value: ticket.appVersion },
+              { label: "Subcategoría",   value: ticket.subcategory },
             ].filter((r) => r.value).map((row) => (
               <div key={row.label}>
                 <p className="text-slate-600 text-xs">{row.label}</p>
