@@ -28,6 +28,7 @@ model Tenant {
   channels    Channel[]
   groups      Group[]
   invitations UserInvitation[]
+  settings    TenantSettings?
 
   @@map("tenants")
 }
@@ -224,6 +225,9 @@ model Category {
   tenantId  String
   name      String
   color     String?  // hex color para la UI
+  parentId  String?
+  parent    Category?  @relation("CategoryChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Category[] @relation("CategoryChildren")
   createdAt DateTime @default(now())
 
   tenant  Tenant   @relation(fields: [tenantId], references: [id])
@@ -255,6 +259,21 @@ enum ChannelType {
   WHATSAPP_BAILEYS
   WHATSAPP_META
   PHONE
+}
+
+// ─── Configuración del tenant ─────────────────────────────────────────────────
+
+model TenantSettings {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  userViewConfig  Json     @default("{}")
+  agentViewConfig Json     @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("tenant_settings")
 }
 
 // ─── Grupos / Equipos ─────────────────────────────────────────────────────────
