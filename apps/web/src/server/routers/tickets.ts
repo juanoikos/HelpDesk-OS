@@ -2,6 +2,18 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import { prisma } from "@helpdesk-os/db";
 import { TRPCError } from "@trpc/server";
+import {
+  notifyTicketCreated,
+  notifyStatusChanged,
+  notifyNewReply,
+  notifyResolved,
+} from "@/lib/email";
+
+// ─── Selector reutilizable para emails ───────────────────────────────────────
+const WITH_EMAIL = {
+  createdBy:  { select: { id: true, name: true, email: true } },
+  assignedTo: { select: { id: true, name: true, email: true } },
+} as const;
 
 // SLA en horas según prioridad
 const SLA_HOURS: Record<string, number> = {
@@ -97,7 +109,7 @@ export const ticketsRouter = router({
       const slaHours    = SLA_HOURS[input.priority] ?? 24;
       const slaDeadline = new Date(Date.now() + slaHours * 60 * 60 * 1000);
 
-      return prisma.ticket.create({
+      const ticket = await prisma.ticket.create({
         data: {
           tenantId,
           number,
@@ -136,7 +148,13 @@ export const ticketsRouter = router({
             },
           },
         },
+        include: WITH_EMAIL,
       });
+
+      // Notificación fire-and-forget (no bloquea la respuesta)
+      notifyTicketCreated(ticket).catch(console.error);
+
+      return ticket;
     }),
 
   // ── Detalle completo ──────────────────────────────────────────────────────
@@ -164,23 +182,35 @@ export const ticketsRouter = router({
   updateStatus: protectedProcedure
     .input(z.object({ id: z.string(), status: statusEnum }))
     .mutation(async ({ input, ctx }) => {
-      return prisma.ticket.update({
+      const ticket = await prisma.ticket.update({
         where: { id: input.id, tenantId: ctx.session.user.tenantId },
         data: {
           status: input.status,
           ...(input.status === "CLOSED" ? { closedAt: new Date() } : {}),
         },
+        include: WITH_EMAIL,
       });
+
+      // Notificar cambio de estado (fire-and-forget)
+      notifyStatusChanged(ticket, input.status).catch(console.error);
+
+      return ticket;
     }),
 
   // ── Guardar solución ──────────────────────────────────────────────────────
   saveSolution: protectedProcedure
     .input(z.object({ id: z.string(), solution: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
-      return prisma.ticket.update({
+      const ticket = await prisma.ticket.update({
         where: { id: input.id, tenantId: ctx.session.user.tenantId },
         data: { solution: input.solution, status: "RESOLVED" },
+        include: WITH_EMAIL,
       });
+
+      // Notificar resolución con solución incluida (fire-and-forget)
+      notifyResolved(ticket, input.solution).catch(console.error);
+
+      return ticket;
     }),
 
   // ── Asignar agente ────────────────────────────────────────────────────────
@@ -205,11 +235,12 @@ export const ticketsRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const ticket = await prisma.ticket.findFirst({
-        where: { id: input.ticketId, tenantId: ctx.session.user.tenantId },
+        where:   { id: input.ticketId, tenantId: ctx.session.user.tenantId },
+        include: WITH_EMAIL,
       });
       if (!ticket) throw new TRPCError({ code: "NOT_FOUND" });
 
-      return prisma.ticketMessage.create({
+      const message = await prisma.ticketMessage.create({
         data: {
           ticketId:   input.ticketId,
           userId:     ctx.session.user.id,
@@ -219,6 +250,14 @@ export const ticketsRouter = router({
         },
         include: { user: { select: { id: true, name: true } } },
       });
+
+      // Notificar respuesta pública al solicitante (fire-and-forget)
+      if (!input.isInternal) {
+        const agentName = ctx.session.user.name ?? "Soporte";
+        notifyNewReply(ticket, input.body, agentName).catch(console.error);
+      }
+
+      return message;
     }),
 
   // ── Perfil del usuario actual ─────────────────────────────────────────────
