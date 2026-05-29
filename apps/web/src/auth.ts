@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@helpdesk-os/db";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import type { UserRole } from "@prisma/client";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -57,11 +58,11 @@ const _nextAuth = NextAuth({
       return token;
     },
     session({ session, token }) {
-      session.user.id        = token.sub as string; // token.sub = user.id del authorize()
-      session.user.role      = token.role;
-      session.user.tenantId  = token.tenantId;
-      session.user.tenantSlug  = token.tenantSlug;
-      session.user.tenantName  = token.tenantName;
+      session.user.id         = token.sub as string;
+      session.user.role       = token.role as UserRole;
+      session.user.tenantId   = token.tenantId as string;
+      session.user.tenantSlug = token.tenantSlug as string;
+      session.user.tenantName = token.tenantName as string;
       return session;
     },
   },
