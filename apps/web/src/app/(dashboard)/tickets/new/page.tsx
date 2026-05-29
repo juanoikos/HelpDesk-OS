@@ -147,12 +147,6 @@ function F({ label, req, children }: { label: string; req?: boolean; children: R
   );
 }
 
-// ─── Vista USUARIO FINAL ──────────────────────────────────────────────────────
-
-function UserTicketForm({ onCreate }: { onCreate: (data: Parameters<typeof trpc.tickets.create.useMutation>[0] extends { onSuccess: unknown } ? never : Parameters<ReturnType<typeof trpc.tickets.create.useMutation>["mutate"]>[0]  : never ) => void; isPending: boolean; error?: string }) {
-  return null; // placeholder overridden below
-}
-
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function NewTicketPage() {
