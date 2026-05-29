@@ -137,6 +137,18 @@ export default function NewTicketPage() {
         </div>
 
         {/* ── Sección 2b: Solicitante ── */}
+        {/*
+          TODO (futuro): reemplazar los campos de texto libre por un selector
+          con autocompletado que busque en una tabla "Contact" (o "EndUser").
+          Al seleccionar un contacto, debe autocompletar:
+            - requesterName    ← Contact.name
+            - requesterContact ← Contact.email o Contact.phone
+          También se necesita un selector de "Ubicación" (Location model) que
+          autocomplete el campo "location" según la sede registrada del contacto.
+          Prerequisito: importar la base de datos de usuarios/clientes (CSV o
+          integración con AD/Google Workspace).
+          Ver: issues/TODO-contactos-y-ubicaciones
+        */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
           <div>
             <h2 className="text-sm font-semibold text-slate-300">Solicitante</h2>
@@ -145,12 +157,14 @@ export default function NewTicketPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5">Nombre del solicitante</label>
+              {/* TODO: cambiar por <ContactAutocomplete> que busca en tabla Contact */}
               <input value={form.requesterName} onChange={set("requesterName")}
                 placeholder="Ej: María González"
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5">Correo o teléfono</label>
+              {/* TODO: autocompletar desde Contact.email / Contact.phone al seleccionar nombre */}
               <input value={form.requesterContact} onChange={set("requesterContact")}
                 placeholder="Ej: maria@empresa.com / 3001234567"
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -248,6 +262,7 @@ export default function NewTicketPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5">Sede / Ubicación</label>
+              {/* TODO: cambiar por <LocationSelect> con opciones cargadas desde tabla Location */}
               <input value={form.location} onChange={set("location")}
                 placeholder="Ej: Bogotá, Piso 3, Sala A..."
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
