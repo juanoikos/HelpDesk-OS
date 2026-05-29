@@ -64,39 +64,179 @@ const TI_TYPES = [
 
 const LOCATION_OPTIONS = ["Oficina","Punto de venta","Bodega / Backoffice","Remoto / Teletrabajo"];
 
-const TECH_CATEGORIES = [
-  "Equipos de trabajo","Impresión","Red e internet","Correo y colaboración",
-  "Software y aplicaciones","Accesos y permisos","Punto de venta (POS)",
-  "Pagos y datáfonos","Seguridad electrónica","Energía y protección eléctrica",
-  "Compras e insumos","Otro",
-];
-
-const TECH_SUBCATEGORIES: Record<string, string[]> = {
-  "Equipos de trabajo":             ["Portátil","Desktop","Monitor / pantalla","Docking station","Teclado","Ratón","Cámara web","Auriculares / diadema","Micrófono","Otro periférico"],
-  "Impresión":                      ["Impresora de oficina","Impresora térmica","Escáner","No imprime","Imprime mal","Atasco de papel","Sin conexión","Cambio de tóner / cinta / papel","Instalación / configuración"],
-  "Red e internet":                 ["Sin internet","Internet lento","Wi-Fi","Red cableada","VPN","Telefonía IP","Puerto de red","Router / switch / access point","Intermitencia"],
-  "Correo y colaboración":          ["Correo Outlook","Microsoft Teams","Calendario","OneDrive","SharePoint","Firma de correo","Buzón compartido","Videollamadas / audio"],
-  "Software y aplicaciones":        ["Sistema operativo","Microsoft Office","ERP / sistema contable","CRM","Navegador web","Antivirus","Aplicación corporativa","Instalación de software","Actualización de software","Licencia / activación"],
-  "Accesos y permisos":             ["Restablecer contraseña","Desbloqueo de cuenta","Alta de usuario","Baja de usuario","Permisos de carpeta","Permisos de correo","Permisos de sistema","MFA / autenticación"],
-  "Punto de venta (POS)":           ["POS / caja","Facturación","Cierre de caja","Apertura de caja","Impresora de tickets","Lector de código de barras","Cajón monedero","Balanza","Pantalla cliente","Tablet de tienda"],
-  "Pagos y datáfonos":              ["Datáfono no funciona","Datáfono sin conexión","No procesa pago","Pago rechazado","Integración POS – datáfono","Cambio de papel","Configuración"],
-  "Seguridad electrónica":          ["CCTV / cámaras","Grabador DVR / NVR","Control de acceso","Alarma","Videoportero","Sin imagen","Sin grabación","Revisión de cámaras"],
-  "Energía y protección eléctrica": ["UPS","Regulador","Fuente de poder","Equipo no enciende","Cortes de energía","Batería UPS","Alarma UPS"],
-  "Compras e insumos":              ["Solicitud de portátil","Solicitud de desktop","Solicitud de monitor","Solicitud de impresora","Solicitud de periférico","Tóner / tinta","Papel","Reposición de equipo","Cotización"],
-  "Otro":                           ["Otro","No clasificado"],
+// ── Matriz de dependencias: Tipo → Categoría → { subcategorías, activos, grupo sugerido } ──
+// Fuente: Matriz_dependencias_tickets.xlsx — Matriz maestra (162 filas)
+type MatrixEntry = { subcategories: string[]; assets: string[]; group: string };
+const TICKET_MATRIX: Record<string, Record<string, MatrixEntry>> = {
+  INCIDENT: {
+    "Equipos de trabajo": {
+      subcategories: ["Portátil","Desktop","Monitor / pantalla","Docking station","Teclado","Ratón","Cámara web","Auriculares / diadema","Micrófono","Otro periférico"],
+      assets: ["Portátil","Desktop","Monitor","Docking","Teclado","Ratón","Cámara web","Diadema"],
+      group: "Mesa de ayuda / Soporte de campo",
+    },
+    "Impresión": {
+      subcategories: ["Impresora de oficina","Impresora térmica","Escáner","No imprime","Imprime mal","Atasco de papel","Sin conexión","Cambio de tóner / cinta / papel","Instalación / configuración"],
+      assets: ["Impresora de oficina","Impresora térmica","Escáner","Servidor de impresión"],
+      group: "Mesa de ayuda / Soporte de campo / Proveedor externo",
+    },
+    "Red e internet": {
+      subcategories: ["Sin internet","Internet lento","Wi-Fi","Red cableada","VPN","Telefonía IP","Puerto de red","Router / switch / access point","Intermitencia"],
+      assets: ["Router","Switch","Access point","Puerto de red","Firewall","Enlace de internet","Teléfono IP"],
+      group: "Infraestructura y redes / Mesa de ayuda / Proveedor externo",
+    },
+    "Correo y colaboración": {
+      subcategories: ["Correo Outlook","Microsoft Teams","Calendario","OneDrive","SharePoint","Firma de correo","Buzón compartido","Videollamadas / audio"],
+      assets: ["Correo Exchange / Outlook","Teams","OneDrive","SharePoint","Buzón compartido","Calendario"],
+      group: "Mesa de ayuda / Aplicaciones",
+    },
+    "Software y aplicaciones": {
+      subcategories: ["Sistema operativo","Microsoft Office","ERP / sistema contable","CRM","Navegador web","Antivirus","Aplicación corporativa","Instalación de software","Actualización de software","Licencia / activación"],
+      assets: ["Portátil","Desktop","Servidor","ERP","CRM","Office","Antivirus","Aplicación corporativa"],
+      group: "Aplicaciones / Mesa de ayuda / Infraestructura y redes / Proveedor externo",
+    },
+    "Accesos y permisos": {
+      subcategories: ["Restablecer contraseña","Desbloqueo de cuenta","Alta de usuario","Baja de usuario","Permisos de carpeta","Permisos de correo","Permisos de sistema","MFA / autenticación"],
+      assets: ["Usuario","Correo","Carpeta compartida","SharePoint","ERP","CRM","VPN","MFA"],
+      group: "Mesa de ayuda / Aplicaciones / Infraestructura y redes",
+    },
+    "Punto de venta (POS)": {
+      subcategories: ["POS / caja","Facturación","Cierre de caja","Apertura de caja","Impresora de tickets","Lector de código de barras","Cajón monedero","Balanza","Pantalla cliente","Tablet de tienda"],
+      assets: ["POS","Caja","Impresora térmica","Lector de código","Cajón monedero","Balanza","Pantalla cliente","Tablet"],
+      group: "POS / retail / Soporte de campo / Mesa de ayuda / Proveedor externo",
+    },
+    "Pagos y datáfonos": {
+      subcategories: ["Datáfono no funciona","Datáfono sin conexión","No procesa pago","Pago rechazado","Integración POS – datáfono","Cambio de papel","Configuración"],
+      assets: ["Datáfono","POS","Red tienda","Pasarela / integración"],
+      group: "POS / retail / Proveedor externo / Mesa de ayuda",
+    },
+    "Seguridad electrónica": {
+      subcategories: ["CCTV / cámaras","Grabador DVR / NVR","Control de acceso","Alarma","Videoportero","Sin imagen","Sin grabación","Revisión de cámaras"],
+      assets: ["Cámara","DVR","NVR","Controladora","Alarma","Videoportero"],
+      group: "Seguridad electrónica / Proveedor externo / Soporte de campo",
+    },
+    "Energía y protección eléctrica": {
+      subcategories: ["UPS","Regulador","Fuente de poder","Equipo no enciende","Cortes de energía","Batería UPS","Alarma UPS"],
+      assets: ["UPS","Regulador","Fuente de poder","Circuito eléctrico","Equipo afectado"],
+      group: "Soporte de campo / Infraestructura y redes / Proveedor externo",
+    },
+    "Otro": {
+      subcategories: ["Otro","No clasificado"],
+      assets: ["Otro"],
+      group: "Mesa de ayuda",
+    },
+  },
+  REQUEST: {
+    "Equipos de trabajo": {
+      subcategories: ["Nuevo portátil","Nuevo monitor","Nuevo teclado","Nueva diadema","Nuevo ratón","Nuevo docking"],
+      assets: ["Portátil","Monitor","Teclado","Diadema","Ratón","Docking"],
+      group: "Compras TI / Mesa de ayuda",
+    },
+    "Software y aplicaciones": {
+      subcategories: ["Instalación de software","Licencia nueva","Alta en aplicación","Configuración de aplicación"],
+      assets: ["Portátil","Desktop","ERP","CRM","Office","Aplicación corporativa"],
+      group: "Aplicaciones / Mesa de ayuda",
+    },
+    "Accesos y permisos": {
+      subcategories: ["Nuevo acceso","Permiso adicional","Alta de usuario","Cambio de rol"],
+      assets: ["Usuario","Correo","Carpeta compartida","SharePoint","ERP","CRM","VPN","MFA"],
+      group: "Mesa de ayuda / Aplicaciones",
+    },
+    "Correo y colaboración": {
+      subcategories: ["Nuevo buzón compartido","Lista de distribución","Permiso de calendario","Espacio en SharePoint / Teams"],
+      assets: ["Correo Exchange / Outlook","Teams","OneDrive","SharePoint","Buzón compartido","Calendario"],
+      group: "Mesa de ayuda / Aplicaciones",
+    },
+    "Compras e insumos": {
+      subcategories: ["Tóner / tinta","Papel","Reposición de periférico","Cotización"],
+      assets: ["Impresora","Tóner","Papel","Periférico"],
+      group: "Compras TI",
+    },
+    "Punto de venta (POS)": {
+      subcategories: ["Alta de caja","Configuración de POS","Nueva impresora térmica","Nuevo lector de código","Nueva balanza"],
+      assets: ["POS","Caja","Impresora térmica","Lector de código","Balanza"],
+      group: "POS / retail / Soporte de campo / Compras TI",
+    },
+    "Pagos y datáfonos": {
+      subcategories: ["Nuevo datáfono","Reposición de datáfono","Configuración de datáfono"],
+      assets: ["Datáfono","POS","Pasarela / integración"],
+      group: "POS / retail / Compras TI / Proveedor externo",
+    },
+    "Otro": {
+      subcategories: ["Otro"],
+      assets: ["Otro"],
+      group: "Mesa de ayuda",
+    },
+  },
+  ACCESS_PERMISSIONS: {
+    "Accesos y permisos": {
+      subcategories: ["Restablecer contraseña","Desbloqueo de cuenta","Alta de usuario","Baja de usuario","Permisos de carpeta","Permisos de correo","Permisos de sistema","MFA / autenticación"],
+      assets: ["Usuario","Correo","Carpeta compartida","SharePoint","ERP","CRM","VPN","MFA"],
+      group: "Mesa de ayuda / Aplicaciones / Infraestructura y redes",
+    },
+  },
+  PURCHASE: {
+    "Compras e insumos": {
+      subcategories: ["Tóner / tinta","Papel","Cotización","Reposición de equipo"],
+      assets: ["Tóner","Papel","Equipo","Periférico"],
+      group: "Compras TI",
+    },
+    "Equipos de trabajo": {
+      subcategories: ["Portátil","Monitor","Teclado","Ratón","Docking","Diadema"],
+      assets: ["Portátil","Monitor","Teclado","Ratón","Docking","Diadema"],
+      group: "Compras TI / Mesa de ayuda",
+    },
+    "Impresión": {
+      subcategories: ["Impresora de oficina","Impresora térmica","Escáner","Tóner / cinta"],
+      assets: ["Impresora de oficina","Impresora térmica","Escáner","Tóner"],
+      group: "Compras TI / Proveedor externo",
+    },
+    "Punto de venta (POS)": {
+      subcategories: ["Impresora térmica","Lector de código","Cajón monedero","Balanza","Tablet de tienda"],
+      assets: ["Impresora térmica","Lector de código","Cajón monedero","Balanza","Tablet"],
+      group: "Compras TI / POS / retail",
+    },
+    "Pagos y datáfonos": {
+      subcategories: ["Datáfono","Reposición de datáfono"],
+      assets: ["Datáfono"],
+      group: "Compras TI / POS / retail / Proveedor externo",
+    },
+  },
+  QUERY: {
+    "Software y aplicaciones": {
+      subcategories: ["Uso de aplicación","Duda funcional","Buenas prácticas","Configuración básica"],
+      assets: ["ERP","CRM","Office","Aplicación corporativa","Portátil","Desktop"],
+      group: "Mesa de ayuda / Aplicaciones",
+    },
+    "Accesos y permisos": {
+      subcategories: ["Cómo solicitar acceso","Estado de acceso","Qué permiso necesito"],
+      assets: ["Usuario","Correo","SharePoint","ERP","CRM","VPN"],
+      group: "Mesa de ayuda / Aplicaciones",
+    },
+    "Correo y colaboración": {
+      subcategories: ["Cómo usar Teams","Cómo compartir calendario","Uso de SharePoint / OneDrive"],
+      assets: ["Teams","Calendario","SharePoint","OneDrive","Correo Exchange / Outlook"],
+      group: "Mesa de ayuda / Aplicaciones",
+    },
+    "Punto de venta (POS)": {
+      subcategories: ["Cómo reimprimir cierre","Uso de POS","Consulta operativa de caja"],
+      assets: ["POS","Caja","Impresora térmica"],
+      group: "POS / retail / Mesa de ayuda",
+    },
+    "Otro": {
+      subcategories: ["Otro"],
+      assets: ["Otro"],
+      group: "Mesa de ayuda",
+    },
+  },
 };
+// PROBLEM y CHANGE no están en la matriz → usan las mismas categorías que INCIDENT
+TICKET_MATRIX.PROBLEM = TICKET_MATRIX.INCIDENT;
+TICKET_MATRIX.CHANGE  = TICKET_MATRIX.INCIDENT;
 
-const AFFECTED_ASSETS = [
-  "Portátil","Desktop","POS","Impresora de oficina","Impresora térmica","Escáner",
-  "Monitor / pantalla","Datáfono","Lector de código de barras","Cajón monedero",
-  "Balanza","Tablet","Cámara / CCTV","DVR / NVR","Router","Switch","Access point",
-  "UPS","Regulador","Servidor","Otro",
-];
-
-const ASSIGNED_GROUPS = [
-  "Mesa de ayuda","Soporte de campo","Infraestructura y redes","Aplicaciones",
-  "POS / retail","Seguridad electrónica","Compras TI","Proveedor externo",
-];
+function categoriesFor(type: string)              { return Object.keys(TICKET_MATRIX[type] ?? {}); }
+function subcategoriesFor(type: string, cat: string) { return TICKET_MATRIX[type]?.[cat]?.subcategories ?? []; }
+function assetsFor(type: string, cat: string)     { return TICKET_MATRIX[type]?.[cat]?.assets ?? []; }
+function suggestedGroup(type: string, cat: string){ return TICKET_MATRIX[type]?.[cat]?.group ?? ""; }
 
 const PRIORITIES = [
   { value: "LOW",    label: "Baja",    desc: "No urgente" },
@@ -376,8 +516,19 @@ function TIForm({
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setF((p) => ({ ...p, [k]: e.target.value }));
 
-  const subOptions = TECH_SUBCATEGORIES[f.techCategory] ?? [];
-  const canSubmit  = f.title.length >= 5 && f.body.length >= 10 && !create.isPending;
+  // Al cambiar tipo → limpiar categoría, subcategoría, activo y grupo
+  const setType = (type: string) =>
+    setF((p) => ({ ...p, type, techCategory: "", subcategory: "", affectedAsset: "", assignedGroup: "" }));
+
+  // Al cambiar categoría → limpiar subcategoría y activo, y pre-rellenar grupo sugerido
+  const setCategory = (cat: string) =>
+    setF((p) => ({ ...p, techCategory: cat, subcategory: "", affectedAsset: "", assignedGroup: suggestedGroup(p.type, cat) }));
+
+  const availableCategories   = categoriesFor(f.type);
+  const availableSubcategories = subcategoriesFor(f.type, f.techCategory);
+  const availableAssets       = assetsFor(f.type, f.techCategory);
+
+  const canSubmit = f.title.length >= 5 && f.body.length >= 10 && !create.isPending;
 
   return (
     <div className="space-y-5">
@@ -387,7 +538,7 @@ function TIForm({
         <div className="grid grid-cols-2 gap-2">
           {TI_TYPES.map((t) => (
             <button key={t.value} type="button"
-              onClick={() => setF((p) => ({ ...p, type: t.value }))}
+              onClick={() => setType(t.value)}
               className={`px-3 py-2.5 rounded-xl border text-sm text-left transition-colors ${
                 f.type === t.value ? "border-blue-500 bg-blue-950 text-white" : "border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-600"
               }`}>
@@ -415,40 +566,64 @@ function TIForm({
         </div>
       </Section>
 
-      {/* Categoría técnica + subcategoría */}
-      <Section title="Categoría técnica">
+      {/* Categoría técnica + subcategoría (dependientes del tipo) */}
+      <Section title="Categoría técnica"
+        sub={availableCategories.length === 0 ? "Elige un tipo de ticket primero" : undefined}>
         <div className="grid grid-cols-2 gap-4">
           <F label="Categoría">
             <select value={f.techCategory}
-              onChange={(e) => setF((p) => ({ ...p, techCategory: e.target.value, subcategory: "" }))}
-              className={selectCls}>
-              <option value="">Seleccionar...</option>
-              {TECH_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              onChange={(e) => setCategory(e.target.value)}
+              className={selectCls}
+              disabled={availableCategories.length === 0}>
+              <option value="">
+                {availableCategories.length === 0 ? "Primero elige el tipo" : "Seleccionar..."}
+              </option>
+              {availableCategories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </F>
           <F label="Subcategoría">
             <select value={f.subcategory} onChange={set("subcategory")} className={selectCls}
-              disabled={subOptions.length === 0}>
-              <option value="">{subOptions.length === 0 ? "Elige categoría primero" : "Seleccionar..."}</option>
-              {subOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+              disabled={availableSubcategories.length === 0}>
+              <option value="">
+                {availableSubcategories.length === 0 ? "Elige categoría primero" : "Seleccionar..."}
+              </option>
+              {availableSubcategories.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </F>
         </div>
+        {/* Grupo sugerido auto-rellenado, editable */}
+        {f.assignedGroup && (
+          <p className="text-xs text-slate-500 mt-1">
+            Grupo sugerido: <span className="text-slate-300">{f.assignedGroup}</span>
+          </p>
+        )}
       </Section>
 
-      {/* Activo + Grupo asignado */}
+      {/* Activo + Grupo asignado (activos filtrados según tipo + categoría) */}
       <Section title="Activo y asignación técnica">
         <div className="grid grid-cols-2 gap-4">
           <F label="Activo / CI afectado">
-            <select value={f.affectedAsset} onChange={set("affectedAsset")} className={selectCls}>
-              <option value="">Seleccionar (opcional)...</option>
-              {AFFECTED_ASSETS.map((a) => <option key={a} value={a}>{a}</option>)}
+            <select value={f.affectedAsset} onChange={set("affectedAsset")} className={selectCls}
+              disabled={availableAssets.length === 0}>
+              <option value="">
+                {availableAssets.length === 0 ? "Elige categoría primero" : "Seleccionar (opcional)..."}
+              </option>
+              {availableAssets.map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
           </F>
           <F label="Grupo asignado">
+            {/* Pre-rellenado automáticamente al elegir categoría; editable manualmente */}
             <select value={f.assignedGroup} onChange={set("assignedGroup")} className={selectCls}>
               <option value="">Sin asignar</option>
-              {ASSIGNED_GROUPS.map((g) => <option key={g} value={g}>{g}</option>)}
+              {["Mesa de ayuda","Soporte de campo","Infraestructura y redes","Aplicaciones",
+                "POS / retail","Seguridad electrónica","Compras TI","Proveedor externo",
+              ].map((g) => <option key={g} value={g}>{g}</option>)}
+              {/* Grupo compuesto sugerido (no está en la lista base) */}
+              {f.assignedGroup && !["Mesa de ayuda","Soporte de campo","Infraestructura y redes",
+                "Aplicaciones","POS / retail","Seguridad electrónica","Compras TI","Proveedor externo",
+              ].includes(f.assignedGroup) && (
+                <option value={f.assignedGroup}>{f.assignedGroup}</option>
+              )}
             </select>
           </F>
         </div>
