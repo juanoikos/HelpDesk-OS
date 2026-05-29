@@ -101,6 +101,10 @@ export default function TicketDetailPage() {
   const { data: ticket, isLoading } = trpc.tickets.getById.useQuery({ id: ticketId });
   const { data: agents }            = trpc.tickets.listAgents.useQuery();
   const { data: groups }            = trpc.teams.groups.list.useQuery();
+  const { data: history }           = trpc.tickets.byRequester.useQuery(
+    { ticketId, createdById: ticket?.createdBy.id ?? "" },
+    { enabled: !!ticket }
+  );
 
   const invalidate = () => utils.tickets.getById.invalidate({ id: ticketId });
 
@@ -277,8 +281,8 @@ export default function TicketDetailPage() {
         </div>
       </div>
 
-      {/* ── 3. Info: solicitante + detalles técnicos ── */}
-      {(ticket.requesterName || ticket.requesterContact || detailRows.length > 0) && (
+      {/* ── 3. Info: solicitante + detalles técnicos + historial del solicitante ── */}
+      {(ticket.requesterName || ticket.requesterContact || detailRows.length > 0 || (history && history.length > 0)) && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Información del ticket</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-3">
@@ -307,6 +311,23 @@ export default function TicketDetailPage() {
               </div>
             ))}
           </div>
+          {history && history.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-800">
+              <h3 className="text-slate-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                Otros tickets del solicitante
+              </h3>
+              <div className="space-y-1">
+                {history.map((t) => (
+                  <Link key={t.id} href={`/tickets/${t.id}`}
+                    className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-slate-800 transition-colors">
+                    <span className="text-slate-600 text-xs">#{t.number}</span>
+                    <span className="text-slate-300 text-xs flex-1 truncate">{t.title}</span>
+                    <span className="text-slate-600 text-xs">{new Date(t.createdAt).toLocaleDateString("es-CO", { day: "2-digit", month: "short" })}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

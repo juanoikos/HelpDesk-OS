@@ -168,6 +168,7 @@ export default function TicketsPage() {
                 <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-5 py-3">Tipo · Categoría</th>
                 <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-5 py-3">Prioridad</th>
                 <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-5 py-3">Estado</th>
+                <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-4 py-3">SLA</th>
                 <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-5 py-3">Reportado por</th>
                 <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-5 py-3">Asignado a</th>
                 <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-5 py-3">Fecha</th>
@@ -231,6 +232,20 @@ export default function TicketsPage() {
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${STATUS_CONFIG[ticket.status].badge}`}>
                       {STATUS_CONFIG[ticket.status].label}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-xs">
+                    {ticket.slaDeadline ? (() => {
+                      const now = new Date();
+                      const deadline = new Date(ticket.slaDeadline);
+                      const hoursLeft = Math.round((deadline.getTime() - now.getTime()) / 36e5);
+                      if (ticket.slaBreached || hoursLeft < 0) {
+                        return <span className="text-red-400 font-medium">⚠ Vencido</span>;
+                      }
+                      if (hoursLeft < 4) {
+                        return <span className="text-amber-400 font-medium">⏱ {hoursLeft}h</span>;
+                      }
+                      return <span className="text-slate-500">{hoursLeft}h</span>;
+                    })() : <span className="text-slate-700">—</span>}
                   </td>
                   {/* Reportado por: solicitante si existe, si no quien lo creó */}
                   <td className="px-5 py-4">

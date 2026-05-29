@@ -583,7 +583,7 @@ function TicketViewsSection() {
   const utils = trpc.useUtils();
   const { data: config, isLoading } = trpc.settings.getFormConfig.useQuery();
   const [activeView, setActiveView] = useState<"user" | "agent">("user");
-  const [localConfig, setLocalConfig] = useState<Record<string, boolean> | null>(null);
+  const [localConfig, setLocalConfig] = useState<Record<string, "hidden" | "optional" | "required"> | null>(null);
   const [saved, setSaved] = useState(false);
 
   const currentConfig = localConfig ?? (activeView === "user" ? config?.userView : config?.agentView) ?? {};
@@ -594,8 +594,8 @@ function TicketViewsSection() {
     onError: (e) => alert(e.message),
   });
 
-  function toggle(key: string) {
-    setLocalConfig({ ...currentConfig, [key]: !currentConfig[key] });
+  function toggle(key: string, value: "hidden" | "optional" | "required") {
+    setLocalConfig({ ...(currentConfig as Record<string, "hidden" | "optional" | "required">), [key]: value });
     setSaved(false);
   }
 
@@ -622,17 +622,26 @@ function TicketViewsSection() {
       </div>
       <div className="space-y-2 mb-4">
         {fields.map(({ key, label, desc }) => {
-          const visible = currentConfig[key] ?? false;
+          const current = (currentConfig[key] as string) ?? "hidden";
+          const visible = current !== "hidden";
           return (
             <div key={key} className={`flex items-center gap-4 px-4 py-3 rounded-xl border transition-colors ${visible ? "bg-slate-900 border-slate-700" : "bg-slate-900/40 border-slate-800"}`}>
               <div className="flex-1">
                 <p className="text-slate-200 text-sm font-medium">{label}</p>
                 <p className="text-slate-500 text-xs mt-0.5">{desc}</p>
               </div>
-              <button onClick={() => toggle(key)}
-                className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${visible ? "bg-blue-600" : "bg-slate-700"}`}>
-                <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${visible ? "translate-x-5" : "translate-x-0.5"}`} />
-              </button>
+              <div className="flex gap-1">
+                {(["hidden", "optional", "required"] as const).map((state) => (
+                  <button key={state} onClick={() => toggle(key, state)}
+                    className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${current === state
+                      ? state === "required" ? "bg-red-900/60 text-red-300 border border-red-800"
+                      : state === "optional" ? "bg-blue-900/60 text-blue-300 border border-blue-800"
+                      : "bg-slate-700 text-slate-400 border border-slate-600"
+                      : "bg-slate-900 text-slate-600 border border-slate-800 hover:text-slate-400"}`}>
+                    {state === "hidden" ? "Oculto" : state === "optional" ? "Opcional" : "Requerido"}
+                  </button>
+                ))}
+              </div>
             </div>
           );
         })}

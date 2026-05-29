@@ -42,10 +42,12 @@ export const ticketsRouter = router({
       }).optional()
     )
     .query(async ({ input, ctx }) => {
-      const tenantId = ctx.session.user.tenantId;
+      const tenantId  = ctx.session.user.tenantId;
+      const isEndUser = ctx.session.user.role === "USER";
       return prisma.ticket.findMany({
         where: {
           tenantId,
+          ...(isEndUser ? { createdById: ctx.session.user.id } : {}),
           ...(input?.status     ? { status:     input.status }     : {}),
           ...(input?.priority   ? { priority:   input.priority }   : {}),
           ...(input?.type       ? { type:       input.type }       : {}),
@@ -307,4 +309,26 @@ export const ticketsRouter = router({
       orderBy: { name: "asc" },
     });
   }),
+
+  // ── Historial del solicitante ─────────────────────────────────────────────
+  byRequester: protectedProcedure
+    .input(z.object({ ticketId: z.string(), createdById: z.string() }))
+    .query(async ({ input, ctx }) => {
+      return prisma.ticket.findMany({
+        where: {
+          tenantId:    ctx.session.user.tenantId,
+          createdById: input.createdById,
+          id:          { not: input.ticketId },
+        },
+        select: {
+          id:        true,
+          number:    true,
+          title:     true,
+          status:    true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      });
+    }),
 });

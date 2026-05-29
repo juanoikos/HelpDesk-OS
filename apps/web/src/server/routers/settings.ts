@@ -14,31 +14,31 @@ const colorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color inválido");
 
 // ─── Defaults de configuración de vistas ──────────────────────────────────────
 
-const DEFAULT_USER_VIEW: Record<string, boolean> = {
-  area:             true,
-  location:         false,
-  requesterContact: true,
-  equipmentName:    true,
-  subcategory:      false,
+const DEFAULT_USER_VIEW: Record<string, "hidden" | "optional" | "required"> = {
+  area:             "optional",
+  location:         "hidden",
+  requesterContact: "optional",
+  equipmentName:    "optional",
+  subcategory:      "hidden",
 };
 
-const DEFAULT_AGENT_VIEW: Record<string, boolean> = {
-  type:             true,
-  priority:         true,
-  impact:           true,
-  area:             true,
-  location:         true,
-  affectedSystem:   true,
-  appVersion:       false,
-  siteType:         false,
-  deviceType:       true,
-  deviceDetail:     true,
-  requesterName:    true,
-  requesterContact: true,
-  equipmentName:    true,
-  techCategory:     false,
-  urgency:          true,
-  diagnosis:        false,
+const DEFAULT_AGENT_VIEW: Record<string, "hidden" | "optional" | "required"> = {
+  type:             "optional",
+  priority:         "optional",
+  impact:           "optional",
+  area:             "optional",
+  location:         "optional",
+  affectedSystem:   "optional",
+  appVersion:       "hidden",
+  siteType:         "hidden",
+  deviceType:       "optional",
+  deviceDetail:     "optional",
+  requesterName:    "optional",
+  requesterContact: "optional",
+  equipmentName:    "optional",
+  techCategory:     "hidden",
+  urgency:          "optional",
+  diagnosis:        "hidden",
 };
 
 export const settingsRouter = router({
@@ -185,10 +185,10 @@ export const settingsRouter = router({
       where: { tenantId: ctx.session.user.tenantId },
     });
     const userView  = (s?.userViewConfig  && typeof s.userViewConfig  === "object" && !Array.isArray(s.userViewConfig))
-      ? { ...DEFAULT_USER_VIEW,  ...(s.userViewConfig  as Record<string, boolean>) }
+      ? { ...DEFAULT_USER_VIEW,  ...(s.userViewConfig  as Record<string, "hidden" | "optional" | "required">) }
       : DEFAULT_USER_VIEW;
     const agentView = (s?.agentViewConfig && typeof s.agentViewConfig === "object" && !Array.isArray(s.agentViewConfig))
-      ? { ...DEFAULT_AGENT_VIEW, ...(s.agentViewConfig as Record<string, boolean>) }
+      ? { ...DEFAULT_AGENT_VIEW, ...(s.agentViewConfig as Record<string, "hidden" | "optional" | "required">) }
       : DEFAULT_AGENT_VIEW;
     return { userView, agentView };
   }),
@@ -196,7 +196,7 @@ export const settingsRouter = router({
   updateFormConfig: protectedProcedure
     .input(z.object({
       view:   z.enum(["user", "agent"]),
-      config: z.record(z.boolean()),
+      config: z.record(z.enum(["hidden", "optional", "required"])),
     }))
     .mutation(async ({ input, ctx }) => {
       requireAdmin(ctx.session.user.role);
