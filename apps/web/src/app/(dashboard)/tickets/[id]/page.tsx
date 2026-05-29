@@ -365,7 +365,7 @@ export default function TicketDetailPage() {
             </>
           ) : (
             <>
-              <p className="text-xs text-slate-500">Describe cómo se resolvió el problema. El ticket pasará a estado "Resuelto".</p>
+              <p className="text-xs text-slate-500">Describe cómo se resolvió el problema. El ticket pasará a estado &quot;Resuelto&quot;.</p>
               <textarea value={solution} onChange={(e) => setSolution(e.target.value)} rows={4}
                 placeholder="Describe la solución aplicada..."
                 className="w-full bg-slate-800 border border-green-900/50 rounded-xl text-white placeholder-slate-500 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600 resize-none" />
