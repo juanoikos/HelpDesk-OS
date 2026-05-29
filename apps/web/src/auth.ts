@@ -55,10 +55,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token;
     },
     session({ session, token }) {
-      session.user.role = token.role;
-      session.user.tenantId = token.tenantId;
-      session.user.tenantSlug = token.tenantSlug;
-      session.user.tenantName = token.tenantName;
+      session.user.id        = token.sub as string; // token.sub = user.id del authorize()
+      session.user.role      = token.role;
+      session.user.tenantId  = token.tenantId;
+      session.user.tenantSlug  = token.tenantSlug;
+      session.user.tenantName  = token.tenantName;
       return session;
     },
   },
