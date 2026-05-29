@@ -1,10 +1,12 @@
 import { Resend } from "resend";
 
-// ─── Cliente ──────────────────────────────────────────────────────────────────
+// ─── Cliente (lazy — evita error en build si la variable no está disponible) ──
 
-const resend  = new Resend(process.env.RESEND_API_KEY);
-const FROM    = process.env.EMAIL_FROM ?? "HelpDesk OS <onboarding@resend.dev>";
-const APP_URL = process.env.AUTH_URL   ?? "http://localhost:3000";
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY ?? "re_placeholder");
+}
+const FROM    = () => process.env.EMAIL_FROM ?? "HelpDesk OS <onboarding@resend.dev>";
+const APP_URL = () => process.env.AUTH_URL   ?? "http://localhost:3000";
 
 // ─── Utilidades ───────────────────────────────────────────────────────────────
 
@@ -13,7 +15,7 @@ function isEmail(val?: string | null): val is string {
 }
 
 function ticketUrl(id: string) {
-  return `${APP_URL}/tickets/${id}`;
+  return `${APP_URL()}/tickets/${id}`;
 }
 
 function num(n: number) {
@@ -208,8 +210,8 @@ export async function notifyTicketCreated(t: TicketBasic) {
   // → Solicitante
   const toRequester = recipientEmail(t);
   if (toRequester) {
-    sends.push(resend.emails.send({
-      from: FROM,
+    sends.push(getResend().emails.send({
+      from: FROM(),
       to: toRequester,
       subject: subject(t, `Tu solicitud fue registrada — ${t.title}`),
       html: baseHtml(`
@@ -226,8 +228,8 @@ export async function notifyTicketCreated(t: TicketBasic) {
 
   // → Agente asignado
   if (t.assignedTo?.email && t.assignedTo.email !== toRequester) {
-    sends.push(resend.emails.send({
-      from: FROM,
+    sends.push(getResend().emails.send({
+      from: FROM(),
       to: t.assignedTo.email,
       subject: subject(t, `Ticket asignado — ${t.title}`),
       html: baseHtml(`
@@ -258,7 +260,7 @@ export async function notifyStatusChanged(t: TicketBasic, newStatus: string) {
   const to = recipientEmail(t);
   if (!to) return;
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to,
     subject: subject(t, `Estado actualizado: ${STATUS_LABEL[newStatus] ?? newStatus} — ${t.title}`),
@@ -280,7 +282,7 @@ export async function notifyNewReply(t: TicketBasic, replyBody: string, agentNam
   const to = recipientEmail(t);
   if (!to) return;
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to,
     subject: subject(t, `Nueva respuesta — ${t.title}`),
@@ -318,7 +320,7 @@ export async function notifyAgentActivity(
   const borderColor = isInternal ? "#a855f7" : "#2563eb";
   const bgColor     = isInternal ? "#150d24" : "#0f172a";
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to: t.assignedTo.email,
     subject: subject(t, `${label} de ${authorName} — ${t.title}`),
@@ -348,7 +350,7 @@ export async function notifyResolved(t: TicketBasic, solution: string) {
   const to = recipientEmail(t);
   if (!to) return;
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to,
     subject: subject(t, `✓ Ticket resuelto — ${t.title}`),
