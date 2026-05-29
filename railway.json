@@ -2,7 +2,7 @@
   "$schema": "https://railway.app/railway-schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "npm ci && npx prisma generate --schema=packages/db/prisma/schema.prisma && npx turbo build --filter=@helpdesk-os/web && cp -r apps/web/public apps/web/.next/standalone/apps/web/public && cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static"
+    "buildCommand": "npx prisma generate --schema=packages/db/prisma/schema.prisma && npx turbo build --filter=@helpdesk-os/web && cp -r apps/web/public apps/web/.next/standalone/apps/web/public && cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static"
   },
   "deploy": {
     "startCommand": "sh apps/web/start.sh",
