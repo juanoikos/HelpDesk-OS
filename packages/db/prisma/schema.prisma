@@ -59,19 +59,31 @@ enum UserRole {
 // ─── Tickets ──────────────────────────────────────────────────────────────────
 
 model Ticket {
-  id           String       @id @default(cuid())
-  tenantId     String
-  number       Int          // número visible: #001, #002...
-  title        String
-  status       TicketStatus @default(OPEN)
-  priority     Priority     @default(MEDIUM)
-  categoryId   String?
-  createdById  String
-  assignedToId String?
-  assetId      String?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  closedAt     DateTime?
+  id             String       @id @default(cuid())
+  tenantId       String
+  number         Int
+  title          String
+  status         TicketStatus @default(NEW)
+  priority       Priority     @default(MEDIUM)
+  type           TicketType   @default(INCIDENT)
+  impact         ImpactLevel  @default(LOW)
+  categoryId     String?
+  subcategory    String?      // subcategoría libre
+  area           String?      // área / departamento
+  location       String?      // sede / ubicación
+  affectedSystem String?      // sistema o aplicación afectada
+  appVersion     String?      // versión de la aplicación
+  requesterName    String?      // nombre del usuario que reportó el problema
+  requesterContact String?      // email o teléfono del solicitante
+  createdById    String
+  assignedToId   String?
+  assetId        String?
+  solution       String?      // resultado / solución al cerrar
+  slaDeadline    DateTime?    // fecha límite según prioridad
+  slaBreached    Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  closedAt       DateTime?
 
   tenant     Tenant          @relation(fields: [tenantId], references: [id])
   category   Category?       @relation(fields: [categoryId], references: [id])
@@ -85,11 +97,26 @@ model Ticket {
 }
 
 enum TicketStatus {
-  OPEN        // abierto
+  NEW         // nuevo — recién creado
+  IN_ANALYSIS // en análisis
   IN_PROGRESS // en progreso
-  WAITING     // esperando respuesta del usuario
+  WAITING     // en espera del usuario
+  ESCALATED   // escalado
   RESOLVED    // resuelto
   CLOSED      // cerrado
+}
+
+enum TicketType {
+  INCIDENT  // incidente
+  REQUEST   // requerimiento
+  CHANGE    // cambio
+}
+
+enum ImpactLevel {
+  LOW       // solo el usuario
+  MEDIUM    // área / departamento
+  HIGH      // múltiples áreas
+  CRITICAL  // toda la empresa
 }
 
 enum Priority {

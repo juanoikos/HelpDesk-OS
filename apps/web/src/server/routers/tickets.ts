@@ -3,13 +3,28 @@ import { router, protectedProcedure } from "../trpc";
 import { prisma } from "@helpdesk-os/db";
 import { TRPCError } from "@trpc/server";
 
+// SLA en horas según prioridad
+const SLA_HOURS: Record<string, number> = {
+  URGENT: 4,
+  HIGH:   8,
+  MEDIUM: 24,
+  LOW:    72,
+};
+
+const statusEnum   = z.enum(["NEW", "IN_ANALYSIS", "IN_PROGRESS", "WAITING", "ESCALATED", "RESOLVED", "CLOSED"]);
+const priorityEnum = z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]);
+const typeEnum     = z.enum(["INCIDENT", "REQUEST", "CHANGE"]);
+const impactEnum   = z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
+const channelEnum  = z.enum(["WEB", "EMAIL", "WHATSAPP", "PHONE"]);
+
 export const ticketsRouter = router({
-  // ── Lista de tickets con filtros opcionales ───────────────────────────────
+  // ── Lista con filtros opcionales ──────────────────────────────────────────
   list: protectedProcedure
     .input(
       z.object({
-        status: z.enum(["OPEN", "IN_PROGRESS", "WAITING", "RESOLVED", "CLOSED"]).optional(),
-        priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
+        status:     statusEnum.optional(),
+        priority:   priorityEnum.optional(),
+        type:       typeEnum.optional(),
         categoryId: z.string().optional(),
       }).optional()
     )
@@ -20,6 +35,7 @@ export const ticketsRouter = router({
           tenantId,
           ...(input?.status     ? { status:     input.status }     : {}),
           ...(input?.priority   ? { priority:   input.priority }   : {}),
+          ...(input?.type       ? { type:       input.type }       : {}),
           ...(input?.categoryId ? { categoryId: input.categoryId } : {}),
         },
         include: {
@@ -36,11 +52,21 @@ export const ticketsRouter = router({
   create: protectedProcedure
     .input(
       z.object({
-        title:      z.string().min(5,  "Mínimo 5 caracteres"),
-        body:       z.string().min(10, "Mínimo 10 caracteres"),
-        priority:   z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).default("MEDIUM"),
-        categoryId: z.string().optional(),
-        channel:    z.enum(["WEB", "EMAIL", "WHATSAPP", "PHONE"]).default("WEB"),
+        title:            z.string().min(5,  "Mínimo 5 caracteres"),
+        body:             z.string().min(10, "Mínimo 10 caracteres"),
+        type:             typeEnum.default("INCIDENT"),
+        priority:         priorityEnum.default("MEDIUM"),
+        impact:           impactEnum.default("LOW"),
+        categoryId:       z.string().optional(),
+        subcategory:      z.string().optional(),
+        area:             z.string().optional(),
+        location:         z.string().optional(),
+        affectedSystem:   z.string().optional(),
+        appVersion:       z.string().optional(),
+        channel:          channelEnum.default("WEB"),
+        assignedToId:     z.string().optional(),
+        requesterName:    z.string().optional(),
+        requesterContact: z.string().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -55,14 +81,29 @@ export const ticketsRouter = router({
       });
       const number = (last?.number ?? 0) + 1;
 
+      // Calcular deadline SLA
+      const slaHours    = SLA_HOURS[input.priority] ?? 24;
+      const slaDeadline = new Date(Date.now() + slaHours * 60 * 60 * 1000);
+
       return prisma.ticket.create({
         data: {
           tenantId,
           number,
-          title:      input.title,
-          priority:   input.priority,
-          categoryId: input.categoryId,
-          createdById: userId,
+          title:          input.title,
+          type:           input.type,
+          priority:       input.priority,
+          impact:         input.impact,
+          categoryId:     input.categoryId,
+          subcategory:    input.subcategory,
+          area:           input.area,
+          location:       input.location,
+          affectedSystem: input.affectedSystem,
+          appVersion:     input.appVersion,
+          assignedToId:   input.assignedToId,
+          createdById:    userId,
+          slaDeadline,
+          requesterName:    input.requesterName,
+          requesterContact: input.requesterContact,
           messages: {
             create: {
               body:    input.body,
@@ -74,7 +115,7 @@ export const ticketsRouter = router({
       });
     }),
 
-  // ── Detalle completo de un ticket ─────────────────────────────────────────
+  // ── Detalle completo ──────────────────────────────────────────────────────
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
@@ -97,12 +138,7 @@ export const ticketsRouter = router({
 
   // ── Cambiar estado ────────────────────────────────────────────────────────
   updateStatus: protectedProcedure
-    .input(
-      z.object({
-        id:     z.string(),
-        status: z.enum(["OPEN", "IN_PROGRESS", "WAITING", "RESOLVED", "CLOSED"]),
-      })
-    )
+    .input(z.object({ id: z.string(), status: statusEnum }))
     .mutation(async ({ input, ctx }) => {
       return prisma.ticket.update({
         where: { id: input.id, tenantId: ctx.session.user.tenantId },
@@ -113,14 +149,19 @@ export const ticketsRouter = router({
       });
     }),
 
+  // ── Guardar solución ──────────────────────────────────────────────────────
+  saveSolution: protectedProcedure
+    .input(z.object({ id: z.string(), solution: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      return prisma.ticket.update({
+        where: { id: input.id, tenantId: ctx.session.user.tenantId },
+        data: { solution: input.solution, status: "RESOLVED" },
+      });
+    }),
+
   // ── Asignar agente ────────────────────────────────────────────────────────
   assign: protectedProcedure
-    .input(
-      z.object({
-        id:     z.string(),
-        userId: z.string().nullable(),
-      })
-    )
+    .input(z.object({ id: z.string(), userId: z.string().nullable() }))
     .mutation(async ({ input, ctx }) => {
       return prisma.ticket.update({
         where: { id: input.id, tenantId: ctx.session.user.tenantId },
@@ -128,14 +169,14 @@ export const ticketsRouter = router({
       });
     }),
 
-  // ── Agregar mensaje al hilo ───────────────────────────────────────────────
+  // ── Agregar mensaje ───────────────────────────────────────────────────────
   addMessage: protectedProcedure
     .input(
       z.object({
         ticketId:   z.string(),
-        body:       z.string().min(1, "El mensaje no puede estar vacío"),
+        body:       z.string().min(1),
         isInternal: z.boolean().default(false),
-        channel:    z.enum(["WEB", "EMAIL", "WHATSAPP", "PHONE"]).default("WEB"),
+        channel:    channelEnum.default("WEB"),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -156,14 +197,11 @@ export const ticketsRouter = router({
       });
     }),
 
-  // ── Agentes disponibles para asignar ─────────────────────────────────────
+  // ── Agentes disponibles ───────────────────────────────────────────────────
   listAgents: protectedProcedure.query(async ({ ctx }) => {
     return prisma.user.findMany({
-      where: {
-        tenantId: ctx.session.user.tenantId,
-        role: { in: ["ADMIN", "AGENT"] },
-      },
-      select: { id: true, name: true, email: true, role: true },
+      where:   { tenantId: ctx.session.user.tenantId, role: { in: ["ADMIN", "AGENT"] } },
+      select:  { id: true, name: true, email: true, role: true },
       orderBy: { name: "asc" },
     });
   }),

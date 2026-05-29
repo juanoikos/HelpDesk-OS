@@ -7,11 +7,13 @@ import { useState } from "react";
 // ─── Configuración visual ─────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; badge: string }> = {
-  OPEN:        { label: "Abierto",      badge: "bg-blue-900 text-blue-300" },
-  IN_PROGRESS: { label: "En progreso",  badge: "bg-amber-900 text-amber-300" },
-  WAITING:     { label: "En espera",    badge: "bg-purple-900 text-purple-300" },
-  RESOLVED:    { label: "Resuelto",     badge: "bg-green-900 text-green-300" },
-  CLOSED:      { label: "Cerrado",      badge: "bg-slate-700 text-slate-400" },
+  NEW:         { label: "Nuevo",       badge: "bg-slate-700 text-slate-200" },
+  IN_ANALYSIS: { label: "En análisis", badge: "bg-indigo-900 text-indigo-300" },
+  IN_PROGRESS: { label: "En progreso", badge: "bg-amber-900 text-amber-300" },
+  WAITING:     { label: "En espera",   badge: "bg-purple-900 text-purple-300" },
+  ESCALATED:   { label: "Escalado",    badge: "bg-red-900 text-red-300" },
+  RESOLVED:    { label: "Resuelto",    badge: "bg-green-900 text-green-300" },
+  CLOSED:      { label: "Cerrado",     badge: "bg-slate-800 text-slate-500" },
 };
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
@@ -22,12 +24,14 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
 };
 
 const STATUS_TABS = [
-  { value: undefined,     label: "Todos" },
-  { value: "OPEN",        label: "Abiertos" },
-  { value: "IN_PROGRESS", label: "En progreso" },
-  { value: "WAITING",     label: "En espera" },
-  { value: "RESOLVED",    label: "Resueltos" },
-  { value: "CLOSED",      label: "Cerrados" },
+  { value: undefined,      label: "Todos" },
+  { value: "NEW",          label: "Nuevos" },
+  { value: "IN_ANALYSIS",  label: "En análisis" },
+  { value: "IN_PROGRESS",  label: "En progreso" },
+  { value: "WAITING",      label: "En espera" },
+  { value: "ESCALATED",    label: "Escalados" },
+  { value: "RESOLVED",     label: "Resueltos" },
+  { value: "CLOSED",       label: "Cerrados" },
 ];
 
 // ─── Página ───────────────────────────────────────────────────────────────────
