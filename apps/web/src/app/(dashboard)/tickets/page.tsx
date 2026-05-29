@@ -21,6 +21,16 @@ const STATUS_CONFIG: Record<string, { label: string; badge: string }> = {
   CLOSED:            { label: "Cerrado",                badge: "bg-slate-800 text-slate-500" },
 };
 
+const TYPE_LABEL: Record<string, string> = {
+  INCIDENT:           "🔴 Incidencia",
+  REQUEST:            "🔵 Solicitud",
+  ACCESS_PERMISSIONS: "🔑 Acceso y permisos",
+  PURCHASE:           "🛒 Compra / insumo",
+  QUERY:              "💬 Consulta",
+  PROBLEM:            "🔶 Problema",
+  CHANGE:             "🟡 Cambio",
+};
+
 const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
   LOW:    { label: "Baja",    color: "text-slate-400" },
   MEDIUM: { label: "Media",   color: "text-blue-400" },
@@ -154,10 +164,11 @@ export default function TicketsPage() {
             <thead>
               <tr className="border-b border-slate-800">
                 <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-5 py-3 w-16">#</th>
-                <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-5 py-3">Título</th>
-                <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-5 py-3">Categoría</th>
+                <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-5 py-3">Título / Descripción</th>
+                <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-5 py-3">Tipo · Categoría</th>
                 <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-5 py-3">Prioridad</th>
                 <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-5 py-3">Estado</th>
+                <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-5 py-3">Reportado por</th>
                 <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-5 py-3">Asignado a</th>
                 <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-5 py-3">Fecha</th>
               </tr>
@@ -173,10 +184,16 @@ export default function TicketsPage() {
                       #{String(ticket.number).padStart(3, "0")}
                     </Link>
                   </td>
-                  <td className="px-5 py-4">
+                  <td className="px-5 py-4 max-w-xs">
                     <Link href={`/tickets/${ticket.id}`} className="text-white text-sm font-medium hover:text-blue-400 transition-colors block">
                       {ticket.title}
                     </Link>
+                    {/* Descripción: subcategoría técnica o whatNeeded */}
+                    {(ticket.subcategory || ticket.whatNeeded) && (
+                      <span className="text-slate-500 text-xs mt-0.5 block truncate">
+                        {ticket.subcategory ?? ticket.whatNeeded}
+                      </span>
+                    )}
                     {ticket._count.messages > 0 && (
                       <span className="text-slate-600 text-xs mt-0.5 block">
                         💬 {ticket._count.messages} mensaje{ticket._count.messages > 1 ? "s" : ""}
@@ -184,16 +201,21 @@ export default function TicketsPage() {
                     )}
                   </td>
                   <td className="px-5 py-4">
+                    {/* Tipo de ticket */}
+                    <span className="text-xs text-slate-400 block">
+                      {TYPE_LABEL[ticket.type] ?? ticket.type}
+                    </span>
+                    {/* Categoría: primero la categoría BD, si no la técnica */}
                     {ticket.category ? (
-                      <span className="flex items-center gap-1.5 text-sm text-slate-300">
-                        <span
-                          className="w-2 h-2 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: ticket.category.color ?? "#64748b" }}
-                        />
+                      <span className="flex items-center gap-1.5 text-sm text-slate-300 mt-0.5">
+                        <span className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: ticket.category.color ?? "#64748b" }} />
                         {ticket.category.name}
                       </span>
+                    ) : ticket.techCategory ? (
+                      <span className="text-slate-400 text-xs mt-0.5 block">{ticket.techCategory}</span>
                     ) : (
-                      <span className="text-slate-600 text-sm">—</span>
+                      <span className="text-slate-700 text-xs">—</span>
                     )}
                   </td>
                   <td className="px-5 py-4">
@@ -205,6 +227,15 @@ export default function TicketsPage() {
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${STATUS_CONFIG[ticket.status].badge}`}>
                       {STATUS_CONFIG[ticket.status].label}
                     </span>
+                  </td>
+                  {/* Reportado por: solicitante si existe, si no quien lo creó */}
+                  <td className="px-5 py-4">
+                    <span className="text-slate-300 text-sm block">
+                      {ticket.requesterName ?? ticket.createdBy.name}
+                    </span>
+                    {ticket.requesterName && (
+                      <span className="text-slate-600 text-xs">vía {ticket.createdBy.name}</span>
+                    )}
                   </td>
                   <td className="px-5 py-4 text-slate-400 text-sm">
                     {ticket.assignedTo?.name ?? <span className="text-slate-600">Sin asignar</span>}
