@@ -100,11 +100,13 @@ export default function TicketDetailPage() {
 
   const { data: ticket, isLoading } = trpc.tickets.getById.useQuery({ id: ticketId });
   const { data: agents }            = trpc.tickets.listAgents.useQuery();
+  const { data: groups }            = trpc.teams.groups.list.useQuery();
 
   const invalidate = () => utils.tickets.getById.invalidate({ id: ticketId });
 
   const updateStatus  = trpc.tickets.updateStatus.useMutation({ onSuccess: invalidate });
   const assign        = trpc.tickets.assign.useMutation({ onSuccess: invalidate });
+  const assignGroup   = trpc.tickets.assignGroup.useMutation({ onSuccess: invalidate });
   const saveSolution  = trpc.tickets.saveSolution.useMutation({ onSuccess: invalidate });
   const addMessage    = trpc.tickets.addMessage.useMutation({
     onSuccess: () => { setReply(""); invalidate(); },
@@ -134,7 +136,7 @@ export default function TicketDetailPage() {
     { label: "Categoría TI", value: ticket.techCategory },
     { label: "Subcategoría", value: ticket.subcategory },
     { label: "Activo / CI",  value: ticket.affectedAsset },
-    { label: "Grupo",        value: ticket.assignedGroup },
+    { label: "Grupo",        value: ticket.group?.name ?? ticket.assignedGroup },
     { label: "Equipo",       value: ticket.equipmentName },
     { label: "Componente",   value: ticket.deviceType },
     { label: "Detalle",      value: ticket.deviceDetail },
@@ -229,8 +231,8 @@ export default function TicketDetailPage() {
           )}
         </div>
 
-        {/* Asignar + Prioridad/Impacto en la misma fila */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 border-t border-slate-800">
+        {/* Asignar + Grupo + Prioridad/Impacto */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 pt-2 border-t border-slate-800">
           <div>
             <p className="text-xs text-slate-500 mb-1">Asignado a</p>
             <select value={ticket.assignedToId ?? ""}
@@ -239,6 +241,16 @@ export default function TicketDetailPage() {
               className="w-full bg-slate-800 border border-slate-700 rounded-lg text-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
               <option value="">Sin asignar</option>
               {agents?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 mb-1">Grupo</p>
+            <select value={ticket.groupId ?? ""}
+              onChange={(e) => assignGroup.mutate({ id: ticketId, groupId: e.target.value || null })}
+              disabled={assignGroup.isPending}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
+              <option value="">Sin grupo</option>
+              {groups?.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
           </div>
           <div>

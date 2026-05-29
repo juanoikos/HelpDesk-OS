@@ -21,11 +21,13 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users      User[]
-  tickets    Ticket[]
-  assets     Asset[]
-  categories Category[]
-  channels   Channel[]
+  users       User[]
+  tickets     Ticket[]
+  assets      Asset[]
+  categories  Category[]
+  channels    Channel[]
+  groups      Group[]
+  invitations UserInvitation[]
 
   @@map("tenants")
 }
@@ -46,6 +48,7 @@ model User {
   ticketsCreated  Ticket[]        @relation("CreatedBy")
   ticketsAssigned Ticket[]        @relation("AssignedTo")
   messages        TicketMessage[]
+  groups          GroupMember[]
 
   @@unique([tenantId, email])
   @@map("users")
@@ -96,6 +99,7 @@ model Ticket {
   whatNeeded      String?     // ¿Qué necesitas? (lenguaje simple)
   affectedService String?     // equipo o servicio afectado (simple)
   createdFromUserView Boolean @default(false) // true si lo creó un usuario final
+  groupId        String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   closedAt       DateTime?
@@ -105,6 +109,7 @@ model Ticket {
   createdBy  User            @relation("CreatedBy", fields: [createdById], references: [id])
   assignedTo User?           @relation("AssignedTo", fields: [assignedToId], references: [id])
   asset      Asset?          @relation(fields: [assetId], references: [id])
+  group      Group?          @relation(fields: [groupId], references: [id])
   messages   TicketMessage[]
 
   @@unique([tenantId, number])
@@ -250,4 +255,52 @@ enum ChannelType {
   WHATSAPP_BAILEYS
   WHATSAPP_META
   PHONE
+}
+
+// ─── Grupos / Equipos ─────────────────────────────────────────────────────────
+
+model Group {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  color       String?  @default("#3b82f6")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant  Tenant        @relation(fields: [tenantId], references: [id])
+  members GroupMember[]
+  tickets Ticket[]
+
+  @@unique([tenantId, name])
+  @@map("groups")
+}
+
+model GroupMember {
+  groupId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@map("group_members")
+}
+
+model UserInvitation {
+  id        String    @id @default(cuid())
+  tenantId  String
+  email     String
+  name      String
+  role      UserRole  @default(AGENT)
+  groupId   String?
+  token     String    @unique @default(cuid())
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("user_invitations")
 }

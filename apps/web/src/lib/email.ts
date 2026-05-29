@@ -344,7 +344,51 @@ export async function notifyAgentActivity(
   }).catch(console.error);
 }
 
-// ─── 5. Ticket resuelto ───────────────────────────────────────────────────────
+// ─── 5. Invitación de usuario ─────────────────────────────────────────────────
+
+export async function notifyInvitation(
+  to: { name: string; email: string },
+  inviterName: string,
+  tenantName: string,
+  activationUrl: string,
+) {
+  await getResend().emails.send({
+    from: FROM(),
+    to:   to.email,
+    subject: `HelpDesk OS — Te han invitado a unirte a ${tenantName}`,
+    html: baseHtml(`
+      <h2 style="color:#f1f5f9;font-size:20px;font-weight:700;margin:0 0 8px">Te invitaron a HelpDesk OS</h2>
+      <p style="color:#94a3b8;font-size:14px;margin:0 0 16px;line-height:1.6">
+        Hola <strong style="color:#e2e8f0">${to.name}</strong>,
+        <strong style="color:#e2e8f0">${inviterName}</strong> te invitó a unirte al equipo de
+        <strong style="color:#e2e8f0">${tenantName}</strong> en HelpDesk OS.
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0"
+        style="background:#0f172a;border:1px solid #334155;border-radius:12px;margin:0 0 20px">
+        <tr>
+          <td style="padding:16px 20px">
+            <table cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td style="color:#64748b;font-size:12px;padding:0 0 6px;width:110px;vertical-align:top">Empresa</td>
+                <td style="color:#e2e8f0;font-size:13px;padding:0 0 6px">${tenantName}</td>
+              </tr>
+              <tr>
+                <td style="color:#64748b;font-size:12px;padding:0;vertical-align:top">Invitado por</td>
+                <td style="color:#e2e8f0;font-size:13px;padding:0">${inviterName}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+      <p style="color:#64748b;font-size:12px;margin:0 0 4px">
+        El enlace expira en 7 días.
+      </p>
+      ${btn("Activar cuenta", activationUrl)}
+    `),
+  }).catch(console.error);
+}
+
+// ─── 6. Ticket resuelto ───────────────────────────────────────────────────────
 
 export async function notifyResolved(t: TicketBasic, solution: string) {
   const to = recipientEmail(t);

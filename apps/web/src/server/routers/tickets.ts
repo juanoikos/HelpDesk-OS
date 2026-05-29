@@ -168,6 +168,7 @@ export const ticketsRouter = router({
           category:   true,
           createdBy:  { select: { id: true, name: true, email: true } },
           assignedTo: { select: { id: true, name: true, email: true } },
+          group:      { select: { id: true, name: true, color: true } },
           messages: {
             include: { user: { select: { id: true, name: true } } },
             orderBy: { createdAt: "asc" },
@@ -235,6 +236,16 @@ export const ticketsRouter = router({
       return prisma.ticket.update({
         where: { id: input.id, tenantId: ctx.session.user.tenantId },
         data:  { assignedToId: input.userId },
+      });
+    }),
+
+  // ── Asignar grupo ─────────────────────────────────────────────────────────
+  assignGroup: protectedProcedure
+    .input(z.object({ id: z.string(), groupId: z.string().nullable() }))
+    .mutation(async ({ input, ctx }) => {
+      return prisma.ticket.update({
+        where: { id: input.id, tenantId: ctx.session.user.tenantId },
+        data:  { groupId: input.groupId },
       });
     }),
 

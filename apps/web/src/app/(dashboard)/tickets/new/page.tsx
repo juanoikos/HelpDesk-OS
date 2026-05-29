@@ -293,6 +293,7 @@ export default function NewTicketPage() {
   const router = useRouter();
   const { data: me }         = trpc.tickets.me.useQuery();
   const { data: agents }     = trpc.tickets.listAgents.useQuery();
+  const { data: groups }     = trpc.teams.groups.list.useQuery();
 
   const create = trpc.tickets.create.useMutation({
     onSuccess: (ticket) => router.push(`/tickets/${ticket.id}`),
@@ -314,7 +315,7 @@ export default function NewTicketPage() {
 
       {isUser
         ? <UserForm create={create} />
-        : <TIForm   create={create} agents={agents} />
+        : <TIForm   create={create} agents={agents} groups={groups} />
       }
     </div>
   );
@@ -483,9 +484,11 @@ function UserForm({ create }: { create: ReturnType<typeof trpc.tickets.create.us
 function TIForm({
   create,
   agents,
+  groups,
 }: {
   create:  ReturnType<typeof trpc.tickets.create.useMutation>;
   agents:  { id: string; name: string }[] | undefined;
+  groups:  { id: string; name: string; color?: string | null }[] | undefined;
 }) {
   const [f, setF] = useState({
     type:           "INCIDENT",
@@ -609,16 +612,14 @@ function TIForm({
             </select>
           </F>
           <F label="Grupo asignado">
-            {/* Pre-rellenado automáticamente al elegir categoría; editable manualmente */}
+            {/* Populated from the groups.list tRPC query */}
             <select value={f.assignedGroup} onChange={set("assignedGroup")} className={selectCls}>
               <option value="">Sin asignar</option>
-              {["Mesa de ayuda","Soporte de campo","Infraestructura y redes","Aplicaciones",
-                "POS / retail","Seguridad electrónica","Compras TI","Proveedor externo",
-              ].map((g) => <option key={g} value={g}>{g}</option>)}
-              {/* Grupo compuesto sugerido (no está en la lista base) */}
-              {f.assignedGroup && !["Mesa de ayuda","Soporte de campo","Infraestructura y redes",
-                "Aplicaciones","POS / retail","Seguridad electrónica","Compras TI","Proveedor externo",
-              ].includes(f.assignedGroup) && (
+              {(groups ?? []).map((g) => (
+                <option key={g.id} value={g.name}>{g.name}</option>
+              ))}
+              {/* Preserve auto-suggested group text if not matched by a real group */}
+              {f.assignedGroup && !(groups ?? []).some((g) => g.name === f.assignedGroup) && (
                 <option value={f.assignedGroup}>{f.assignedGroup}</option>
               )}
             </select>
