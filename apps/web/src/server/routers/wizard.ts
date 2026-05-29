@@ -108,8 +108,9 @@ export const wizardRouter = router({
       });
       for (const ch of input.channels) {
         const type =
-          ch === "email" ? ("EMAIL" as const) :
-          ch === "whatsapp" ? ("WHATSAPP_BAILEYS" as const) : null;
+          ch === "email"    ? ("EMAIL"             as const) :
+          ch === "whatsapp" ? ("WHATSAPP_BAILEYS"  as const) :
+          ch === "phone"    ? ("PHONE"             as const) : null;
         if (!type) continue;
         await prisma.channel.upsert({
           where: { tenantId_type: { tenantId, type } },

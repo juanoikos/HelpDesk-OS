@@ -199,4 +199,5 @@ enum ChannelType {
   EMAIL
   WHATSAPP_BAILEYS
   WHATSAPP_META
+  PHONE
 }

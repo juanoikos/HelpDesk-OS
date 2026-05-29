@@ -10,9 +10,10 @@ const PRESET_COLORS = [
 ];
 
 const CHANNEL_INFO: Record<string, { label: string; icon: string; description: string }> = {
-  EMAIL: { label: "Email", icon: "📧", description: "Recibe y responde tickets por correo electrónico" },
-  WHATSAPP_BAILEYS: { label: "WhatsApp (Informal)", icon: "💬", description: "Número personal de WhatsApp — sin cuenta Business" },
-  WHATSAPP_META: { label: "WhatsApp Business API", icon: "✅", description: "API oficial de Meta — requiere cuenta Business verificada" },
+  EMAIL:            { label: "Email",                 icon: "📧", description: "Recibe y responde tickets por correo electrónico" },
+  WHATSAPP_BAILEYS: { label: "WhatsApp (Informal)",   icon: "💬", description: "Número personal de WhatsApp — sin cuenta Business" },
+  WHATSAPP_META:    { label: "WhatsApp Business API", icon: "✅", description: "API oficial de Meta — requiere cuenta Business verificada" },
+  PHONE:            { label: "Llamada telefónica",    icon: "📞", description: "Tickets creados a partir de llamadas entrantes" },
 };
 
 // ─── Formulario para agregar / editar categoría ───────────────────────────────
@@ -193,7 +194,7 @@ function ChannelsSection() {
                 <button
                   onClick={() =>
                     toggle.mutate({
-                      type: type as "EMAIL" | "WHATSAPP_BAILEYS" | "WHATSAPP_META",
+                      type: type as "EMAIL" | "WHATSAPP_BAILEYS" | "WHATSAPP_META" | "PHONE",
                       active: !active,
                     })
                   }

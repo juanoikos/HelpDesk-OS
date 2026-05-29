@@ -67,7 +67,7 @@ export const settingsRouter = router({
   toggleChannel: protectedProcedure
     .input(
       z.object({
-        type: z.enum(["EMAIL", "WHATSAPP_BAILEYS", "WHATSAPP_META"]),
+        type: z.enum(["EMAIL", "WHATSAPP_BAILEYS", "WHATSAPP_META", "PHONE"]),
         active: z.boolean(),
       })
     )

@@ -10,8 +10,9 @@ type Method = "claude" | "template" | null;
 // ─── Canales disponibles ──────────────────────────────────────────────────────
 
 const ALL_CHANNELS = [
-  { id: "email",     icon: "📧", label: "Email",     description: "Tickets por correo electrónico" },
-  { id: "whatsapp",  icon: "💬", label: "WhatsApp",  description: "Tickets por WhatsApp (Baileys)" },
+  { id: "email",    icon: "📧", label: "Email",    description: "Tickets por correo electrónico" },
+  { id: "whatsapp", icon: "💬", label: "WhatsApp", description: "Tickets por WhatsApp (Baileys)" },
+  { id: "phone",    icon: "📞", label: "Llamada",  description: "Tickets por llamada telefónica" },
 ];
 
 // ─── Selector de método ───────────────────────────────────────────────────────
