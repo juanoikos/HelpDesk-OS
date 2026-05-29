@@ -2,7 +2,8 @@
 
 import { trpc } from "@/trpc/react";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 
 // ─── Configuración visual ─────────────────────────────────────────────────────
 
@@ -29,6 +30,7 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
 
 const STATUS_TABS = [
   { value: undefined,          label: "Todos" },
+  { value: "open",             label: "Abiertos" },
   { value: "NEW",              label: "Nuevos" },
   { value: "ASSIGNED",         label: "Asignados" },
   { value: "IN_DIAGNOSIS",     label: "En diagnóstico" },
@@ -44,12 +46,32 @@ const STATUS_TABS = [
 
 // ─── Página ───────────────────────────────────────────────────────────────────
 
+const OPEN_STATUSES = ["NEW","ASSIGNED","IN_DIAGNOSIS","IN_ANALYSIS","IN_PROGRESS","WAITING","PENDING_USER","PENDING_PROVIDER","ESCALATED"];
+
 export default function TicketsPage() {
+  const searchParams = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
 
-  const { data: tickets, isLoading } = trpc.tickets.list.useQuery(
-    statusFilter ? { status: statusFilter as "NEW" | "ASSIGNED" | "IN_DIAGNOSIS" | "IN_ANALYSIS" | "IN_PROGRESS" | "WAITING" | "PENDING_USER" | "PENDING_PROVIDER" | "ESCALATED" | "RESOLVED" | "CLOSED" } : undefined
+  // Leer filtro inicial desde URL (?status=IN_PROGRESS o ?status=open)
+  useEffect(() => {
+    const s = searchParams.get("status");
+    if (s === "open" || s === null) setStatusFilter(s === "open" ? "open" : undefined);
+    else setStatusFilter(s);
+  }, [searchParams]);
+
+  // "open" es un filtro especial del dashboard → no se pasa al router (se filtra en cliente)
+  const queryStatus = (!statusFilter || statusFilter === "open")
+    ? undefined
+    : statusFilter as "NEW"|"ASSIGNED"|"IN_DIAGNOSIS"|"IN_ANALYSIS"|"IN_PROGRESS"|"WAITING"|"PENDING_USER"|"PENDING_PROVIDER"|"ESCALATED"|"RESOLVED"|"CLOSED";
+
+  const { data: rawTickets, isLoading } = trpc.tickets.list.useQuery(
+    queryStatus ? { status: queryStatus } : undefined
   );
+
+  // Si el filtro es "open", filtrar en cliente los estados abiertos
+  const tickets = statusFilter === "open"
+    ? rawTickets?.filter((t) => OPEN_STATUSES.includes(t.status))
+    : rawTickets;
 
   // Conteos para los tabs
   const { data: all } = trpc.tickets.list.useQuery(undefined);
@@ -79,7 +101,11 @@ export default function TicketsPage() {
       {/* Tabs de filtro */}
       <div className="flex gap-1 mb-6 bg-slate-900 border border-slate-800 rounded-xl p-1 w-fit flex-wrap">
         {STATUS_TABS.map((tab) => {
-          const count = tab.value ? (counts[tab.value] ?? 0) : (all?.length ?? 0);
+          const count = !tab.value
+            ? (all?.length ?? 0)
+            : tab.value === "open"
+              ? (all ?? []).filter((t) => OPEN_STATUSES.includes(t.status)).length
+              : (counts[tab.value] ?? 0);
           return (
             <button
               key={tab.label}

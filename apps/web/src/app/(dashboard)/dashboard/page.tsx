@@ -10,9 +10,14 @@ export default async function DashboardPage() {
   const tenantId = session.user.tenantId;
 
   // Carga datos reales de la BD
-  const [categoriesCount, ticketsCount] = await Promise.all([
+  const OPEN_STATUSES = ["NEW","ASSIGNED","IN_DIAGNOSIS","IN_ANALYSIS","IN_PROGRESS","WAITING","PENDING_USER","PENDING_PROVIDER","ESCALATED"] as const;
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  const [categoriesCount, openCount, inProgressCount, resolvedTodayCount] = await Promise.all([
     prisma.category.count({ where: { tenantId } }),
-    prisma.ticket.count({ where: { tenantId } }),
+    prisma.ticket.count({ where: { tenantId, status: { in: OPEN_STATUSES } } }),
+    prisma.ticket.count({ where: { tenantId, status: "IN_PROGRESS" } }),
+    prisma.ticket.count({ where: { tenantId, status: "RESOLVED", updatedAt: { gte: today } } }),
   ]);
 
   const isConfigured = categoriesCount > 0;
@@ -55,18 +60,21 @@ export default async function DashboardPage() {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
-          { label: "Tickets abiertos", value: ticketsCount === 0 ? "—" : String(ticketsCount) },
-          { label: "En progreso", value: "—" },
-          { label: "Resueltos hoy", value: "—" },
-          { label: "Categorías", value: categoriesCount === 0 ? "—" : String(categoriesCount) },
+          { label: "Tickets abiertos", value: openCount,        href: "/tickets?status=open",        color: "text-blue-400" },
+          { label: "En progreso",       value: inProgressCount, href: "/tickets?status=IN_PROGRESS",  color: "text-amber-400" },
+          { label: "Resueltos hoy",     value: resolvedTodayCount, href: "/tickets?status=RESOLVED",  color: "text-green-400" },
+          { label: "Categorías",        value: categoriesCount, href: "/settings",                   color: "text-slate-200" },
         ].map((stat) => (
-          <div
+          <Link
             key={stat.label}
-            className="bg-slate-900 rounded-xl border border-slate-800 p-5"
+            href={stat.href}
+            className="bg-slate-900 rounded-xl border border-slate-800 p-5 hover:border-slate-600 hover:bg-slate-800/60 transition-colors group"
           >
-            <p className="text-slate-400 text-sm mb-2">{stat.label}</p>
-            <p className="text-3xl font-bold text-white">{stat.value}</p>
-          </div>
+            <p className="text-slate-400 text-sm mb-2 group-hover:text-slate-300 transition-colors">{stat.label}</p>
+            <p className={`text-3xl font-bold ${stat.value === 0 ? "text-slate-600" : stat.color}`}>
+              {stat.value === 0 ? "—" : stat.value}
+            </p>
+          </Link>
         ))}
       </div>
 
