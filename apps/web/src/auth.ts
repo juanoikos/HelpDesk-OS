@@ -9,7 +9,9 @@ const credentialsSchema = z.object({
   password: z.string().min(1),
 });
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+// Separar en dos pasos evita el error de TypeScript con isolatedModules:
+// "The inferred type of 'auth' cannot be named without a reference to next-auth/lib"
+const _nextAuth = NextAuth({
   providers: [
     Credentials({
       credentials: {
@@ -71,3 +73,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     strategy: "jwt",
   },
 });
+
+export const { handlers, auth, signIn, signOut } = _nextAuth;
