@@ -292,7 +292,8 @@ function F({ label, req, children }: { label: string; req?: boolean; children: R
 export default function NewTicketPage() {
   const router = useRouter();
   const { data: me }         = trpc.tickets.me.useQuery();
-  const { data: categories } = trpc.settings.listCategories.useQuery();
+  // categories de BD disponibles para futuro uso (filtros, validación)
+  const { data: _categories } = trpc.settings.listCategories.useQuery();
   const { data: agents }     = trpc.tickets.listAgents.useQuery();
 
   const create = trpc.tickets.create.useMutation({
@@ -314,8 +315,8 @@ export default function NewTicketPage() {
       </div>
 
       {isUser
-        ? <UserForm    create={create} categories={categories} />
-        : <TIForm      create={create} categories={categories} agents={agents} />
+        ? <UserForm create={create} />
+        : <TIForm   create={create} agents={agents} />
       }
     </div>
   );
@@ -323,7 +324,7 @@ export default function NewTicketPage() {
 
 // ─── FORMULARIO USUARIO FINAL ─────────────────────────────────────────────────
 
-function UserForm({ create, categories: _categories }: { create: ReturnType<typeof trpc.tickets.create.useMutation>; categories: { id: string; name: string }[] | undefined }) {
+function UserForm({ create }: { create: ReturnType<typeof trpc.tickets.create.useMutation> }) {
   const [f, setF] = useState({
     type:            "",
     where:           "",
@@ -483,12 +484,10 @@ function UserForm({ create, categories: _categories }: { create: ReturnType<type
 
 function TIForm({
   create,
-  categories: _categories,
   agents,
 }: {
-  create:     ReturnType<typeof trpc.tickets.create.useMutation>;
-  categories: { id: string; name: string }[] | undefined;
-  agents:     { id: string; name: string }[] | undefined;
+  create:  ReturnType<typeof trpc.tickets.create.useMutation>;
+  agents:  { id: string; name: string }[] | undefined;
 }) {
   const [f, setF] = useState({
     type:           "INCIDENT",

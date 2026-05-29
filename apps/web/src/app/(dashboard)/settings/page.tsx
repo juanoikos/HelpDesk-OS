@@ -180,7 +180,7 @@ function ChannelsSection() {
       <div className="space-y-3">
         {(Object.entries(CHANNEL_INFO) as [string, { label: string; icon: string; description: string }][]).map(
           ([type, info]) => {
-            const active = activeTypes.has(type);
+            const active = activeTypes.has(type as Parameters<typeof activeTypes.has>[0]);
             return (
               <div
                 key={type}
