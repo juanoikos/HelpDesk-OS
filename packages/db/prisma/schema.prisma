@@ -77,13 +77,24 @@ model Ticket {
   requesterName    String?      // nombre del usuario que reportó el problema
   requesterContact String?      // email o teléfono del solicitante
   equipmentName    String?      // equipo afectado: Desktop, Portátil, POS Principal, etc.
-  deviceType       String?      // componente: Pantalla, CPU, Impresora, etc.
+  deviceType       String?      // componente: Pantalla, CPU, Software, etc.
+  deviceDetail     String?      // detalle libre: cuál SO, cuál software, cuál otro
   createdById    String
   assignedToId   String?
   assetId        String?
   solution       String?      // resultado / solución al cerrar
   slaDeadline    DateTime?    // fecha límite según prioridad
   slaBreached    Boolean      @default(false)
+  // ── Campos vista TI ──────────────────────────────────────────────────────────
+  techCategory    String?     // categoría técnica TI
+  affectedAsset   String?     // activo / CI afectado (texto libre)
+  assignedGroup   String?     // grupo asignado (Mesa de ayuda, Campo, etc.)
+  urgency         String?     // urgencia: LOW / MEDIUM / HIGH / CRITICAL
+  diagnosis       String?     // causa / diagnóstico
+  // ── Campos vista usuario final ────────────────────────────────────────────────
+  whatNeeded      String?     // ¿Qué necesitas? (lenguaje simple)
+  affectedService String?     // equipo o servicio afectado (simple)
+  createdFromUserView Boolean @default(false) // true si lo creó un usuario final
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   closedAt       DateTime?
@@ -100,19 +111,27 @@ model Ticket {
 }
 
 enum TicketStatus {
-  NEW         // nuevo — recién creado
-  IN_ANALYSIS // en análisis
-  IN_PROGRESS // en progreso
-  WAITING     // en espera del usuario
-  ESCALATED   // escalado
-  RESOLVED    // resuelto
-  CLOSED      // cerrado
+  NEW               // nuevo
+  ASSIGNED          // asignado
+  IN_DIAGNOSIS      // en diagnóstico
+  IN_ANALYSIS       // en análisis
+  IN_PROGRESS       // en curso
+  WAITING           // en espera
+  PENDING_USER      // pendiente de usuario
+  PENDING_PROVIDER  // pendiente de proveedor
+  ESCALATED         // escalado
+  RESOLVED          // resuelto
+  CLOSED            // cerrado
 }
 
 enum TicketType {
-  INCIDENT  // incidente
-  REQUEST   // requerimiento
-  CHANGE    // cambio
+  INCIDENT           // incidencia
+  REQUEST            // solicitud
+  ACCESS_PERMISSIONS // acceso y permisos
+  PURCHASE           // compra / insumo
+  QUERY              // consulta
+  PROBLEM            // problema
+  CHANGE             // cambio
 }
 
 enum ImpactLevel {

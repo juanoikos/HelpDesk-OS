@@ -7,13 +7,17 @@ import { useState } from "react";
 // ─── Configuración visual ─────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; badge: string }> = {
-  NEW:         { label: "Nuevo",       badge: "bg-slate-700 text-slate-200" },
-  IN_ANALYSIS: { label: "En análisis", badge: "bg-indigo-900 text-indigo-300" },
-  IN_PROGRESS: { label: "En progreso", badge: "bg-amber-900 text-amber-300" },
-  WAITING:     { label: "En espera",   badge: "bg-purple-900 text-purple-300" },
-  ESCALATED:   { label: "Escalado",    badge: "bg-red-900 text-red-300" },
-  RESOLVED:    { label: "Resuelto",    badge: "bg-green-900 text-green-300" },
-  CLOSED:      { label: "Cerrado",     badge: "bg-slate-800 text-slate-500" },
+  NEW:               { label: "Nuevo",                  badge: "bg-slate-700 text-slate-200" },
+  ASSIGNED:          { label: "Asignado",               badge: "bg-blue-900 text-blue-300" },
+  IN_DIAGNOSIS:      { label: "En diagnóstico",         badge: "bg-cyan-900 text-cyan-300" },
+  IN_ANALYSIS:       { label: "En análisis",            badge: "bg-indigo-900 text-indigo-300" },
+  IN_PROGRESS:       { label: "En progreso",            badge: "bg-amber-900 text-amber-300" },
+  WAITING:           { label: "En espera",              badge: "bg-purple-900 text-purple-300" },
+  PENDING_USER:      { label: "Pendiente usuario",      badge: "bg-orange-900 text-orange-300" },
+  PENDING_PROVIDER:  { label: "Pendiente proveedor",    badge: "bg-rose-900 text-rose-300" },
+  ESCALATED:         { label: "Escalado",               badge: "bg-red-900 text-red-300" },
+  RESOLVED:          { label: "Resuelto",               badge: "bg-green-900 text-green-300" },
+  CLOSED:            { label: "Cerrado",                badge: "bg-slate-800 text-slate-500" },
 };
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
@@ -24,14 +28,18 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
 };
 
 const STATUS_TABS = [
-  { value: undefined,      label: "Todos" },
-  { value: "NEW",          label: "Nuevos" },
-  { value: "IN_ANALYSIS",  label: "En análisis" },
-  { value: "IN_PROGRESS",  label: "En progreso" },
-  { value: "WAITING",      label: "En espera" },
-  { value: "ESCALATED",    label: "Escalados" },
-  { value: "RESOLVED",     label: "Resueltos" },
-  { value: "CLOSED",       label: "Cerrados" },
+  { value: undefined,          label: "Todos" },
+  { value: "NEW",              label: "Nuevos" },
+  { value: "ASSIGNED",         label: "Asignados" },
+  { value: "IN_DIAGNOSIS",     label: "En diagnóstico" },
+  { value: "IN_ANALYSIS",      label: "En análisis" },
+  { value: "IN_PROGRESS",      label: "En progreso" },
+  { value: "WAITING",          label: "En espera" },
+  { value: "PENDING_USER",     label: "Pend. usuario" },
+  { value: "PENDING_PROVIDER", label: "Pend. proveedor" },
+  { value: "ESCALATED",        label: "Escalados" },
+  { value: "RESOLVED",         label: "Resueltos" },
+  { value: "CLOSED",           label: "Cerrados" },
 ];
 
 // ─── Página ───────────────────────────────────────────────────────────────────
@@ -40,7 +48,7 @@ export default function TicketsPage() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
 
   const { data: tickets, isLoading } = trpc.tickets.list.useQuery(
-    statusFilter ? { status: statusFilter as "OPEN" | "IN_PROGRESS" | "WAITING" | "RESOLVED" | "CLOSED" } : undefined
+    statusFilter ? { status: statusFilter as "NEW" | "ASSIGNED" | "IN_DIAGNOSIS" | "IN_ANALYSIS" | "IN_PROGRESS" | "WAITING" | "PENDING_USER" | "PENDING_PROVIDER" | "ESCALATED" | "RESOLVED" | "CLOSED" } : undefined
   );
 
   // Conteos para los tabs

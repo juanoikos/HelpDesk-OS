@@ -11,9 +11,9 @@ const SLA_HOURS: Record<string, number> = {
   LOW:    72,
 };
 
-const statusEnum   = z.enum(["NEW", "IN_ANALYSIS", "IN_PROGRESS", "WAITING", "ESCALATED", "RESOLVED", "CLOSED"]);
+const statusEnum   = z.enum(["NEW","ASSIGNED","IN_DIAGNOSIS","IN_ANALYSIS","IN_PROGRESS","WAITING","PENDING_USER","PENDING_PROVIDER","ESCALATED","RESOLVED","CLOSED"]);
 const priorityEnum = z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]);
-const typeEnum     = z.enum(["INCIDENT", "REQUEST", "CHANGE"]);
+const typeEnum     = z.enum(["INCIDENT","REQUEST","ACCESS_PERMISSIONS","PURCHASE","QUERY","PROBLEM","CHANGE"]);
 const impactEnum   = z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
 const channelEnum  = z.enum(["WEB", "EMAIL", "WHATSAPP", "PHONE"]);
 
@@ -67,9 +67,18 @@ export const ticketsRouter = router({
         assignedToId:     z.string().optional(),
         requesterName:    z.string().optional(),
         requesterContact: z.string().optional(),
-        siteType:         z.enum(["OFFICE", "POS"]).optional(),
-        equipmentName:    z.string().optional(),
-        deviceType:       z.string().optional(),
+        siteType:             z.enum(["OFFICE", "POS"]).optional(),
+        equipmentName:        z.string().optional(),
+        deviceType:           z.string().optional(),
+        deviceDetail:         z.string().optional(),
+        techCategory:         z.string().optional(),
+        affectedAsset:        z.string().optional(),
+        assignedGroup:        z.string().optional(),
+        urgency:              z.string().optional(),
+        diagnosis:            z.string().optional(),
+        whatNeeded:           z.string().optional(),
+        affectedService:      z.string().optional(),
+        createdFromUserView:  z.boolean().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -107,9 +116,18 @@ export const ticketsRouter = router({
           slaDeadline,
           requesterName:    input.requesterName,
           requesterContact: input.requesterContact,
-          siteType:         input.siteType,
-          equipmentName:    input.equipmentName,
-          deviceType:       input.deviceType,
+          siteType:            input.siteType,
+          equipmentName:       input.equipmentName,
+          deviceType:          input.deviceType,
+          deviceDetail:        input.deviceDetail,
+          techCategory:        input.techCategory,
+          affectedAsset:       input.affectedAsset,
+          assignedGroup:       input.assignedGroup,
+          urgency:             input.urgency,
+          diagnosis:           input.diagnosis,
+          whatNeeded:          input.whatNeeded,
+          affectedService:     input.affectedService,
+          createdFromUserView: input.createdFromUserView ?? false,
           messages: {
             create: {
               body:    input.body,
@@ -202,6 +220,13 @@ export const ticketsRouter = router({
         include: { user: { select: { id: true, name: true } } },
       });
     }),
+
+  // ── Perfil del usuario actual ─────────────────────────────────────────────
+  me: protectedProcedure.query(({ ctx }) => ({
+    id:   ctx.session.user.id,
+    name: ctx.session.user.name ?? "",
+    role: ctx.session.user.role,
+  })),
 
   // ── Agentes disponibles ───────────────────────────────────────────────────
   listAgents: protectedProcedure.query(async ({ ctx }) => {

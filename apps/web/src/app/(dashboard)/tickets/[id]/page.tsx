@@ -8,13 +8,17 @@ import Link from "next/link";
 // ─── Configuración visual ─────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; badge: string }> = {
-  NEW:         { label: "Nuevo",        badge: "bg-slate-700 text-slate-200 border-slate-600" },
-  IN_ANALYSIS: { label: "En análisis",  badge: "bg-indigo-900 text-indigo-300 border-indigo-800" },
-  IN_PROGRESS: { label: "En progreso",  badge: "bg-amber-900 text-amber-300 border-amber-800" },
-  WAITING:     { label: "En espera",    badge: "bg-purple-900 text-purple-300 border-purple-800" },
-  ESCALATED:   { label: "Escalado",     badge: "bg-red-900 text-red-300 border-red-800" },
-  RESOLVED:    { label: "Resuelto",     badge: "bg-green-900 text-green-300 border-green-800" },
-  CLOSED:      { label: "Cerrado",      badge: "bg-slate-800 text-slate-500 border-slate-700" },
+  NEW:               { label: "Nuevo",                  badge: "bg-slate-700 text-slate-200 border-slate-600" },
+  ASSIGNED:          { label: "Asignado",               badge: "bg-blue-900 text-blue-300 border-blue-800" },
+  IN_DIAGNOSIS:      { label: "En diagnóstico",         badge: "bg-cyan-900 text-cyan-300 border-cyan-800" },
+  IN_ANALYSIS:       { label: "En análisis",            badge: "bg-indigo-900 text-indigo-300 border-indigo-800" },
+  IN_PROGRESS:       { label: "En progreso",            badge: "bg-amber-900 text-amber-300 border-amber-800" },
+  WAITING:           { label: "En espera",              badge: "bg-purple-900 text-purple-300 border-purple-800" },
+  PENDING_USER:      { label: "Pendiente de usuario",   badge: "bg-orange-900 text-orange-300 border-orange-800" },
+  PENDING_PROVIDER:  { label: "Pendiente de proveedor", badge: "bg-rose-900 text-rose-300 border-rose-800" },
+  ESCALATED:         { label: "Escalado",               badge: "bg-red-900 text-red-300 border-red-800" },
+  RESOLVED:          { label: "Resuelto",               badge: "bg-green-900 text-green-300 border-green-800" },
+  CLOSED:            { label: "Cerrado",                badge: "bg-slate-800 text-slate-500 border-slate-700" },
 };
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
@@ -25,9 +29,13 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
 };
 
 const TYPE_CONFIG: Record<string, { label: string; icon: string }> = {
-  INCIDENT: { label: "Incidente",    icon: "🔴" },
-  REQUEST:  { label: "Requerimiento", icon: "🔵" },
-  CHANGE:   { label: "Cambio",       icon: "🟡" },
+  INCIDENT:           { label: "Incidente",         icon: "🔴" },
+  REQUEST:            { label: "Requerimiento",     icon: "🔵" },
+  ACCESS_PERMISSIONS: { label: "Acceso y permisos", icon: "🔐" },
+  PURCHASE:           { label: "Compra / Insumo",   icon: "🛒" },
+  QUERY:              { label: "Consulta",          icon: "❓" },
+  PROBLEM:            { label: "Problema",          icon: "⚠️" },
+  CHANGE:             { label: "Cambio",            icon: "🟡" },
 };
 
 const IMPACT_CONFIG: Record<string, string> = {
@@ -42,13 +50,17 @@ const CHANNEL_ICON: Record<string, string> = {
 };
 
 const STATUS_OPTIONS = [
-  { value: "NEW",         label: "Nuevo" },
-  { value: "IN_ANALYSIS", label: "En análisis" },
-  { value: "IN_PROGRESS", label: "En progreso" },
-  { value: "WAITING",     label: "En espera" },
-  { value: "ESCALATED",   label: "Escalado" },
-  { value: "RESOLVED",    label: "Resuelto" },
-  { value: "CLOSED",      label: "Cerrado" },
+  { value: "NEW",              label: "Nuevo" },
+  { value: "ASSIGNED",         label: "Asignado" },
+  { value: "IN_DIAGNOSIS",     label: "En diagnóstico" },
+  { value: "IN_ANALYSIS",      label: "En análisis" },
+  { value: "IN_PROGRESS",      label: "En progreso" },
+  { value: "WAITING",          label: "En espera" },
+  { value: "PENDING_USER",     label: "Pendiente de usuario" },
+  { value: "PENDING_PROVIDER", label: "Pendiente de proveedor" },
+  { value: "ESCALATED",        label: "Escalado" },
+  { value: "RESOLVED",         label: "Resuelto" },
+  { value: "CLOSED",           label: "Cerrado" },
 ];
 
 // ─── SLA helper ───────────────────────────────────────────────────────────────
@@ -258,7 +270,7 @@ export default function TicketDetailPage() {
             <div className="space-y-1">
               {STATUS_OPTIONS.map((opt) => (
                 <button key={opt.value}
-                  onClick={() => updateStatus.mutate({ id: ticketId, status: opt.value as "NEW" | "IN_ANALYSIS" | "IN_PROGRESS" | "WAITING" | "ESCALATED" | "RESOLVED" | "CLOSED" })}
+                  onClick={() => updateStatus.mutate({ id: ticketId, status: opt.value as "NEW" | "ASSIGNED" | "IN_DIAGNOSIS" | "IN_ANALYSIS" | "IN_PROGRESS" | "WAITING" | "PENDING_USER" | "PENDING_PROVIDER" | "ESCALATED" | "RESOLVED" | "CLOSED" })}
                   disabled={updateStatus.isPending}
                   className={`w-full text-left px-3 py-2 rounded-xl text-sm transition-colors ${
                     ticket.status === opt.value
@@ -330,6 +342,7 @@ export default function TicketDetailPage() {
               { label: "Sede / Ubicación", value: ticket.location },
               { label: "Equipo",         value: ticket.equipmentName },
               { label: "Componente",     value: ticket.deviceType },
+              { label: "Detalle",        value: ticket.deviceDetail },
               { label: "Sistema",        value: ticket.affectedSystem },
               { label: "Versión",        value: ticket.appVersion },
               { label: "Subcategoría",   value: ticket.subcategory },
