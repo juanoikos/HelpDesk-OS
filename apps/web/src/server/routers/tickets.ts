@@ -167,10 +167,11 @@ export const ticketsRouter = router({
       const ticket = await prisma.ticket.findFirst({
         where: { id: input.id, tenantId: ctx.session.user.tenantId },
         include: {
-          category:   true,
-          createdBy:  { select: { id: true, name: true, email: true } },
-          assignedTo: { select: { id: true, name: true, email: true } },
-          group:      { select: { id: true, name: true, color: true } },
+          category:    true,
+          createdBy:   { select: { id: true, name: true, email: true } },
+          assignedTo:  { select: { id: true, name: true, email: true } },
+          group:       { select: { id: true, name: true, color: true } },
+          attachments: { orderBy: { createdAt: "asc" } },
           messages: {
             include: { user: { select: { id: true, name: true } } },
             orderBy: { createdAt: "asc" },

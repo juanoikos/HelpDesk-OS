@@ -111,7 +111,8 @@ model Ticket {
   assignedTo User?           @relation("AssignedTo", fields: [assignedToId], references: [id])
   asset      Asset?          @relation(fields: [assetId], references: [id])
   group      Group?          @relation(fields: [groupId], references: [id])
-  messages   TicketMessage[]
+  messages    TicketMessage[]
+  attachments TicketAttachment[]
 
   @@unique([tenantId, number])
   @@map("tickets")
@@ -153,6 +154,23 @@ enum Priority {
   MEDIUM
   HIGH
   URGENT
+}
+
+// ─── Adjuntos de Ticket ───────────────────────────────────────────────────────
+
+model TicketAttachment {
+  id        String   @id @default(cuid())
+  ticketId  String
+  name      String   // nombre original del archivo
+  key       String   // clave en R2
+  url       String   // URL pública
+  size      Int      // tamaño en bytes
+  mimeType  String?
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@map("ticket_attachments")
 }
 
 // ─── Mensajes de Ticket ───────────────────────────────────────────────────────

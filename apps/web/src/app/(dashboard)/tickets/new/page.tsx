@@ -4,6 +4,7 @@ import { trpc } from "@/trpc/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { FileUpload, uploadFiles, type SelectedFile } from "@/components/FileUpload";
 
 // ─── Datos estáticos ──────────────────────────────────────────────────────────
 
@@ -290,14 +291,11 @@ function F({ label, req, children }: { label: string; req?: boolean; children: R
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function NewTicketPage() {
-  const router = useRouter();
   const { data: me }         = trpc.tickets.me.useQuery();
   const { data: agents }     = trpc.tickets.listAgents.useQuery();
   const { data: groups }     = trpc.teams.groups.list.useQuery();
 
-  const create = trpc.tickets.create.useMutation({
-    onSuccess: (ticket) => router.push(`/tickets/${ticket.id}`),
-  });
+  const create = trpc.tickets.create.useMutation();
 
   const isUser = me?.role === "USER";
 
@@ -324,6 +322,7 @@ export default function NewTicketPage() {
 // ─── FORMULARIO USUARIO FINAL ─────────────────────────────────────────────────
 
 function UserForm({ create }: { create: ReturnType<typeof trpc.tickets.create.useMutation> }) {
+  const router = useRouter();
   const [f, setF] = useState({
     type:            "",
     where:           "",
@@ -336,28 +335,38 @@ function UserForm({ create }: { create: ReturnType<typeof trpc.tickets.create.us
     title:           "",
     body:            "",
   });
+  const [files,      setFiles]      = useState<SelectedFile[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setF((p) => ({ ...p, [k]: e.target.value }));
 
-  const canSubmit = f.type && f.where && f.whatNeeded && f.body.length >= 10 && !create.isPending;
+  const canSubmit = f.type && f.where && f.whatNeeded && f.body.length >= 10 && !submitting;
 
-  const handleSubmit = () => {
-    const autoTitle = f.title.trim() || `${f.whatNeeded}${f.where ? ` — ${f.where}` : ""}`;
-    create.mutate({
-      title:              autoTitle,
-      body:               f.body,
-      type:               f.type as "INCIDENT"|"REQUEST"|"ACCESS_PERMISSIONS"|"PURCHASE"|"QUERY",
-      priority:           f.impactValue === "CRITICAL" ? "URGENT" : f.impactValue === "HIGH" ? "HIGH" : f.impactValue === "MEDIUM" ? "MEDIUM" : "LOW",
-      impact:             (f.impactValue || "LOW") as "LOW"|"MEDIUM"|"HIGH"|"CRITICAL",
-      location:           f.where,
-      siteType:           (f.siteType || undefined) as "OFFICE"|"POS"|undefined,
-      whatNeeded:         f.whatNeeded,
-      affectedService:    f.affectedService || undefined,
-      requesterName:      undefined,
-      channel:            "WEB",
-      createdFromUserView: true,
-    });
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    try {
+      const autoTitle = f.title.trim() || `${f.whatNeeded}${f.where ? ` — ${f.where}` : ""}`;
+      const ticket = await create.mutateAsync({
+        title:              autoTitle,
+        body:               f.body,
+        type:               f.type as "INCIDENT"|"REQUEST"|"ACCESS_PERMISSIONS"|"PURCHASE"|"QUERY",
+        priority:           f.impactValue === "CRITICAL" ? "URGENT" : f.impactValue === "HIGH" ? "HIGH" : f.impactValue === "MEDIUM" ? "MEDIUM" : "LOW",
+        impact:             (f.impactValue || "LOW") as "LOW"|"MEDIUM"|"HIGH"|"CRITICAL",
+        location:           f.where,
+        siteType:           (f.siteType || undefined) as "OFFICE"|"POS"|undefined,
+        whatNeeded:         f.whatNeeded,
+        affectedService:    f.affectedService || undefined,
+        requesterName:      undefined,
+        channel:            "WEB",
+        createdFromUserView: true,
+      });
+      if (files.length > 0) await uploadFiles(files, ticket.id);
+      router.push(`/tickets/${ticket.id}`);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -458,6 +467,11 @@ function UserForm({ create }: { create: ReturnType<typeof trpc.tickets.create.us
                 </F>
               </Section>
 
+              {/* Adjuntos */}
+              <Section title="Archivos adjuntos" sub="Opcional — captura de pantalla, foto, documento">
+                <FileUpload value={files} onChange={setFiles} disabled={submitting} />
+              </Section>
+
               {create.error && (
                 <p className="text-red-400 text-sm bg-red-950 border border-red-800 rounded-xl px-4 py-3">{create.error.message}</p>
               )}
@@ -468,7 +482,7 @@ function UserForm({ create }: { create: ReturnType<typeof trpc.tickets.create.us
                 </Link>
                 <button onClick={handleSubmit} disabled={!canSubmit}
                   className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl text-sm">
-                  {create.isPending ? "Enviando..." : "Enviar solicitud"}
+                  {submitting ? "Enviando..." : "Enviar solicitud"}
                 </button>
               </div>
             </>
@@ -490,6 +504,10 @@ function TIForm({
   agents:  { id: string; name: string }[] | undefined;
   groups:  { id: string; name: string; color?: string | null }[] | undefined;
 }) {
+  const router = useRouter();
+  const [files,      setFiles]      = useState<SelectedFile[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+
   const [f, setF] = useState({
     type:           "INCIDENT",
     location:       "",
@@ -528,7 +546,7 @@ function TIForm({
   const availableSubcategories = subcategoriesFor(f.type, f.techCategory);
   const availableAssets       = assetsFor(f.type, f.techCategory);
 
-  const canSubmit = f.title.length >= 5 && f.body.length >= 10 && !create.isPending;
+  const canSubmit = f.title.length >= 5 && f.body.length >= 10 && !submitting;
 
   return (
     <div className="space-y-5">
@@ -715,6 +733,11 @@ function TIForm({
         </F>
       </Section>
 
+      {/* Adjuntos */}
+      <Section title="Archivos adjuntos" sub="Opcional — capturas, logs, documentos relevantes">
+        <FileUpload value={files} onChange={setFiles} disabled={submitting} />
+      </Section>
+
       {create.error && (
         <p className="text-red-400 text-sm bg-red-950 border border-red-800 rounded-xl px-4 py-3">{create.error.message}</p>
       )}
@@ -724,31 +747,41 @@ function TIForm({
           Cancelar
         </Link>
         <button
-          onClick={() => create.mutate({
-            title:            f.title,
-            body:             f.body,
-            type:             f.type             as "INCIDENT"|"REQUEST"|"ACCESS_PERMISSIONS"|"PURCHASE"|"QUERY"|"PROBLEM"|"CHANGE",
-            priority:         f.priority         as "LOW"|"MEDIUM"|"HIGH"|"URGENT",
-            impact:           f.impact           as "LOW"|"MEDIUM"|"HIGH"|"CRITICAL",
-            channel:          f.channel          as "WEB"|"EMAIL"|"WHATSAPP"|"PHONE",
-            location:         f.location         || undefined,
-            siteType:         (f.siteType        || undefined) as "OFFICE"|"POS"|undefined,
-            techCategory:     f.techCategory     || undefined,
-            subcategory:      f.subcategory      || undefined,
-            affectedAsset:    f.affectedAsset    || undefined,
-            assignedGroup:    f.assignedGroup    || undefined,
-            urgency:          f.urgency          || undefined,
-            diagnosis:        f.diagnosis        || undefined,
-            affectedSystem:   f.affectedSystem   || undefined,
-            appVersion:       f.appVersion       || undefined,
-            requesterName:    f.requesterName    || undefined,
-            requesterContact: f.requesterContact || undefined,
-            assignedToId:     f.assignedToId     || undefined,
-            categoryId:       f.categoryId       || undefined,
-          })}
+          onClick={async () => {
+            if (!canSubmit) return;
+            setSubmitting(true);
+            try {
+              const ticket = await create.mutateAsync({
+                title:            f.title,
+                body:             f.body,
+                type:             f.type             as "INCIDENT"|"REQUEST"|"ACCESS_PERMISSIONS"|"PURCHASE"|"QUERY"|"PROBLEM"|"CHANGE",
+                priority:         f.priority         as "LOW"|"MEDIUM"|"HIGH"|"URGENT",
+                impact:           f.impact           as "LOW"|"MEDIUM"|"HIGH"|"CRITICAL",
+                channel:          f.channel          as "WEB"|"EMAIL"|"WHATSAPP"|"PHONE",
+                location:         f.location         || undefined,
+                siteType:         (f.siteType        || undefined) as "OFFICE"|"POS"|undefined,
+                techCategory:     f.techCategory     || undefined,
+                subcategory:      f.subcategory      || undefined,
+                affectedAsset:    f.affectedAsset    || undefined,
+                assignedGroup:    f.assignedGroup    || undefined,
+                urgency:          f.urgency          || undefined,
+                diagnosis:        f.diagnosis        || undefined,
+                affectedSystem:   f.affectedSystem   || undefined,
+                appVersion:       f.appVersion       || undefined,
+                requesterName:    f.requesterName    || undefined,
+                requesterContact: f.requesterContact || undefined,
+                assignedToId:     f.assignedToId     || undefined,
+                categoryId:       f.categoryId       || undefined,
+              });
+              if (files.length > 0) await uploadFiles(files, ticket.id);
+              router.push(`/tickets/${ticket.id}`);
+            } finally {
+              setSubmitting(false);
+            }
+          }}
           disabled={!canSubmit}
           className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl text-sm">
-          {create.isPending ? "Creando..." : "Crear ticket"}
+          {submitting ? "Creando..." : "Crear ticket"}
         </button>
       </div>
     </div>

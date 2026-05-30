@@ -331,7 +331,50 @@ export default function TicketDetailPage() {
         </div>
       )}
 
-      {/* ── 4. Mensajes ── */}
+      {/* ── 4. Adjuntos ── */}
+      {ticket.attachments && ticket.attachments.length > 0 && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+            Archivos adjuntos ({ticket.attachments.length})
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {ticket.attachments.map((att) => {
+              const isImage = att.mimeType?.startsWith("image/");
+              const icon    = att.mimeType?.includes("pdf") ? "📕"
+                            : att.mimeType?.includes("word") ? "📄"
+                            : att.mimeType?.includes("excel") || att.mimeType?.includes("sheet") ? "📊"
+                            : att.mimeType?.includes("zip") ? "🗜"
+                            : isImage ? "🖼" : "📄";
+              const kb = att.size < 1024 * 1024
+                ? `${(att.size / 1024).toFixed(1)} KB`
+                : `${(att.size / 1024 / 1024).toFixed(1)} MB`;
+
+              return (
+                <a
+                  key={att.id}
+                  href={att.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl px-3 py-2.5 transition-colors group max-w-xs"
+                >
+                  {isImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={att.url} alt={att.name} className="w-10 h-10 rounded object-cover flex-shrink-0" />
+                  ) : (
+                    <span className="text-xl flex-shrink-0">{icon}</span>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-slate-200 text-xs font-medium truncate group-hover:text-white">{att.name}</p>
+                    <p className="text-slate-500 text-xs">{kb} · ⬇ Descargar</p>
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── 6. Mensajes ── */}
       <div className="space-y-3">
         {ticket.messages.map((msg) => (
           <div key={msg.id}
