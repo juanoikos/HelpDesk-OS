@@ -2,7 +2,7 @@
 
 import { trpc } from "@/trpc/react";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 
 // ─── Configuración visual ─────────────────────────────────────────────────────
@@ -116,11 +116,35 @@ export default function TicketDetailPage() {
     onSuccess: () => { setReply(""); invalidate(); },
   });
 
+  // Subir archivos adjuntos al ticket existente
+  const handleUploadFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+    setUploading(true);
+    for (const file of files) {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("ticketId", ticketId);
+      await fetch("/api/upload", { method: "POST", body: fd }).catch(console.error);
+    }
+    setAttachFiles([]);
+    setUploading(false);
+    invalidate();
+  };
+
+  const handleSendReply = async () => {
+    if (reply.trim().length === 0) return;
+    await addMessage.mutateAsync({ ticketId, body: reply, isInternal });
+    if (attachFiles.length > 0) await handleUploadFiles(attachFiles);
+  };
+
   const [reply,        setReply]        = useState("");
   const [isInternal,   setIsInternal]   = useState(false);
   const [solution,     setSolution]     = useState("");
   const [showSolution, setShowSolution] = useState(false);
   const [closeWarning, setCloseWarning] = useState(false);
+  const [attachFiles,  setAttachFiles]  = useState<File[]>([]);
+  const [uploading,    setUploading]    = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (isLoading) return <div className="text-slate-500 text-sm py-16 text-center">Cargando ticket...</div>;
   if (!ticket)   return (
@@ -332,6 +356,9 @@ export default function TicketDetailPage() {
       )}
 
       {/* ── 4. Adjuntos ── */}
+      {(!isClosed) && (
+        <DirectUpload ticketId={ticketId} onDone={invalidate} />
+      )}
       {ticket.attachments && ticket.attachments.length > 0 && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
@@ -432,11 +459,35 @@ export default function TicketDetailPage() {
               <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={4}
                 placeholder={isInternal ? "Nota interna (solo visible para el equipo)..." : "Escribe tu respuesta al usuario..."}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+
+              {/* Adjuntos en respuesta */}
+              <div>
+                <input ref={fileInputRef} type="file" multiple className="hidden"
+                  accept=".png,.jpg,.jpeg,.gif,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
+                  onChange={(e) => {
+                    if (e.target.files) setAttachFiles((p) => [...p, ...Array.from(e.target.files!)]);
+                    e.target.value = "";
+                  }} />
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button type="button" onClick={() => fileInputRef.current?.click()}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors">
+                    📎 Adjuntar archivo
+                  </button>
+                  {attachFiles.map((f, i) => (
+                    <div key={i} className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1">
+                      <span className="text-slate-300 text-xs truncate max-w-[140px]">{f.name}</span>
+                      <button type="button" onClick={() => setAttachFiles((p) => p.filter((_, j) => j !== i))}
+                        className="text-slate-500 hover:text-slate-300 text-xs">✕</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {addMessage.error && <p className="text-red-400 text-xs">{addMessage.error.message}</p>}
-              <button onClick={() => addMessage.mutate({ ticketId, body: reply, isInternal })}
-                disabled={reply.trim().length === 0 || addMessage.isPending}
+              <button onClick={handleSendReply}
+                disabled={reply.trim().length === 0 || addMessage.isPending || uploading}
                 className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-medium px-5 py-2.5 rounded-xl transition-colors text-sm">
-                {addMessage.isPending ? "Enviando..." : "Enviar respuesta"}
+                {addMessage.isPending || uploading ? "Enviando..." : "Enviar respuesta"}
               </button>
             </>
           ) : (
@@ -461,6 +512,66 @@ export default function TicketDetailPage() {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Subir archivos directamente al ticket ────────────────────────────────────
+
+function DirectUpload({ ticketId, onDone }: { ticketId: string; onDone: () => void }) {
+  const inputRef             = useRef<HTMLInputElement>(null);
+  const [files,  setFiles]   = useState<File[]>([]);
+  const [busy,   setBusy]    = useState(false);
+  const [error,  setError]   = useState<string | null>(null);
+
+  const upload = async () => {
+    if (files.length === 0) return;
+    setBusy(true);
+    setError(null);
+    let failed = 0;
+    for (const f of files) {
+      const fd = new FormData();
+      fd.append("file", f);
+      fd.append("ticketId", ticketId);
+      const res = await fetch("/api/upload", { method: "POST", body: fd }).catch(() => null);
+      if (!res?.ok) failed++;
+    }
+    setBusy(false);
+    setFiles([]);
+    if (failed > 0) setError(`${failed} archivo(s) no se pudieron subir`);
+    onDone();
+  };
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Adjuntar archivos</p>
+      <input ref={inputRef} type="file" multiple className="hidden"
+        accept=".png,.jpg,.jpeg,.gif,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
+        onChange={(e) => {
+          if (e.target.files) setFiles((p) => [...p, ...Array.from(e.target.files!)]);
+          e.target.value = "";
+        }} />
+      <div className="flex items-center gap-2 flex-wrap">
+        <button type="button" onClick={() => inputRef.current?.click()}
+          disabled={busy}
+          className="text-xs px-3 py-2 rounded-lg border border-dashed border-slate-600 text-slate-400 hover:text-slate-200 hover:border-slate-400 transition-colors">
+          📎 Seleccionar archivos
+        </button>
+        {files.map((f, i) => (
+          <div key={i} className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5">
+            <span className="text-slate-300 text-xs truncate max-w-[150px]">{f.name}</span>
+            <button type="button" onClick={() => setFiles((p) => p.filter((_, j) => j !== i))}
+              className="text-slate-500 hover:text-slate-300 text-xs">✕</button>
+          </div>
+        ))}
+        {files.length > 0 && (
+          <button type="button" onClick={upload} disabled={busy}
+            className="text-xs px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium transition-colors">
+            {busy ? "Subiendo..." : `Subir ${files.length} archivo${files.length > 1 ? "s" : ""}`}
+          </button>
+        )}
+      </div>
+      {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
     </div>
   );
 }
