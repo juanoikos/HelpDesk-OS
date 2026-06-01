@@ -4,6 +4,7 @@ import { settingsRouter } from "./settings";
 import { ticketsRouter } from "./tickets";
 import { teamsRouter } from "./teams";
 import { cannedResponsesRouter } from "./cannedResponses";
+import { reportsRouter } from "./reports";
 
 export const appRouter = router({
   wizard:          wizardRouter,
@@ -11,6 +12,7 @@ export const appRouter = router({
   tickets:         ticketsRouter,
   teams:           teamsRouter,
   cannedResponses: cannedResponsesRouter,
+  reports:         reportsRouter,
 });
 
 export type AppRouter = typeof appRouter;
