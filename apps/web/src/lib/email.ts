@@ -261,7 +261,7 @@ export async function notifyStatusChanged(t: TicketBasic, newStatus: string) {
   if (!to) return;
 
   await getResend().emails.send({
-    from: FROM,
+    from: FROM(),
     to,
     subject: subject(t, `Estado actualizado: ${STATUS_LABEL[newStatus] ?? newStatus} — ${t.title}`),
     html: baseHtml(`
@@ -283,7 +283,7 @@ export async function notifyNewReply(t: TicketBasic, replyBody: string, agentNam
   if (!to) return;
 
   await getResend().emails.send({
-    from: FROM,
+    from: FROM(),
     to,
     subject: subject(t, `Nueva respuesta — ${t.title}`),
     html: baseHtml(`
@@ -321,7 +321,7 @@ export async function notifyAgentActivity(
   const bgColor     = isInternal ? "#150d24" : "#0f172a";
 
   await getResend().emails.send({
-    from: FROM,
+    from: FROM(),
     to: t.assignedTo.email,
     subject: subject(t, `${label} de ${authorName} — ${t.title}`),
     html: baseHtml(`
@@ -429,7 +429,7 @@ export async function notifyResolved(t: TicketBasic, solution: string) {
   if (!to) return;
 
   await getResend().emails.send({
-    from: FROM,
+    from: FROM(),
     to,
     subject: subject(t, `✓ Ticket resuelto — ${t.title}`),
     html: baseHtml(`
