@@ -41,9 +41,10 @@ model User {
   tenantId  String
   email     String
   name      String
-  role         UserRole @default(USER)
-  passwordHash String?           // null para usuarios creados por admin sin contraseña aún
-  createdAt    DateTime @default(now())
+  role           UserRole @default(USER)
+  passwordHash   String?           // null para usuarios creados por admin sin contraseña aún
+  emailSignature String?           // firma que se añade al pie de respuestas por email
+  createdAt      DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   tenant          Tenant          @relation(fields: [tenantId], references: [id])

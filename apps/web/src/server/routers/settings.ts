@@ -48,12 +48,13 @@ export const settingsRouter = router({
     return prisma.user.findUnique({
       where:  { id: ctx.session.user.id },
       select: {
-        id:        true,
-        name:      true,
-        email:     true,
-        role:      true,
-        createdAt: true,
-        tenant:    { select: { id: true, name: true, slug: true } },
+        id:             true,
+        name:           true,
+        email:          true,
+        role:           true,
+        emailSignature: true,
+        createdAt:      true,
+        tenant:         { select: { id: true, name: true, slug: true } },
       },
     });
   }),
@@ -73,6 +74,15 @@ export const settingsRouter = router({
         if (dup) throw new TRPCError({ code: "CONFLICT", message: "Ya existe una cuenta con ese correo en este tenant" });
       }
       return prisma.user.update({ where: { id: userId }, data: input });
+    }),
+
+  updateSignature: protectedProcedure
+    .input(z.object({ signature: z.string().max(500) }))
+    .mutation(async ({ input, ctx }) => {
+      return prisma.user.update({
+        where: { id: ctx.session.user.id },
+        data:  { emailSignature: input.signature || null },
+      });
     }),
 
   changePassword: protectedProcedure

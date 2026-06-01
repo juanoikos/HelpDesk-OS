@@ -46,6 +46,8 @@ ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "createdFromUserView" BOOLEAN NOT
 
 ALTER TABLE "tickets" ALTER COLUMN "status" SET DEFAULT 'NEW';
 
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "emailSignature" TEXT;
+
 CREATE TABLE IF NOT EXISTS "ticket_attachments" (
   "id"        TEXT         NOT NULL,
   "ticketId"  TEXT         NOT NULL,

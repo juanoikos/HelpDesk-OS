@@ -57,12 +57,15 @@ function ProfileSection() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [editMode, setEditMode] = useState(false);
-  const [curPwd, setCurPwd] = useState("");
-  const [newPwd, setNewPwd] = useState("");
-  const [newPwd2, setNewPwd2] = useState("");
-  const [pwdMode, setPwdMode] = useState(false);
-  const [pwdMsg, setPwdMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [profMsg, setProfMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [curPwd,   setCurPwd]   = useState("");
+  const [newPwd,   setNewPwd]   = useState("");
+  const [newPwd2,  setNewPwd2]  = useState("");
+  const [pwdMode,  setPwdMode]  = useState(false);
+  const [pwdMsg,   setPwdMsg]   = useState<{ ok: boolean; text: string } | null>(null);
+  const [profMsg,  setProfMsg]  = useState<{ ok: boolean; text: string } | null>(null);
+  const [sig,      setSig]      = useState("");
+  const [sigMode,  setSigMode]  = useState(false);
+  const [sigMsg,   setSigMsg]   = useState<{ ok: boolean; text: string } | null>(null);
 
   function startEdit() {
     setName(profile?.name ?? "");
@@ -79,6 +82,11 @@ function ProfileSection() {
   const changePassword = trpc.settings.changePassword.useMutation({
     onSuccess: () => { setCurPwd(""); setNewPwd(""); setNewPwd2(""); setPwdMode(false); setPwdMsg({ ok: true, text: "Contraseña cambiada correctamente." }); },
     onError: (e) => setPwdMsg({ ok: false, text: e.message }),
+  });
+
+  const updateSignature = trpc.settings.updateSignature.useMutation({
+    onSuccess: () => { utils.settings.getProfile.invalidate(); setSigMode(false); setSigMsg({ ok: true, text: "Firma guardada correctamente." }); },
+    onError:   (e) => setSigMsg({ ok: false, text: e.message }),
   });
 
   if (isLoading) return <p className="text-slate-500 text-sm">Cargando...</p>;
@@ -172,6 +180,52 @@ function ProfileSection() {
         ) : (
           <div className="px-4 py-3 bg-slate-900 rounded-xl border border-slate-800">
             <span className="text-slate-500 text-sm">••••••••••••</span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Firma de email ── */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-white font-semibold text-lg">Firma de email</h2>
+            <p className="text-slate-500 text-xs mt-0.5">Se añade automáticamente al pie de cada respuesta que envíes.</p>
+          </div>
+          {!sigMode && (
+            <button onClick={() => { setSig(profile?.emailSignature ?? ""); setSigMode(true); setSigMsg(null); }}
+              className="text-blue-400 hover:text-blue-300 text-sm transition-colors">
+              {profile?.emailSignature ? "Editar" : "Añadir"}
+            </button>
+          )}
+        </div>
+        {sigMsg && (
+          <p className={`text-sm mb-3 px-3 py-2 rounded-lg border ${sigMsg.ok ? "text-green-400 bg-green-950 border-green-800" : "text-red-400 bg-red-950 border-red-800"}`}>
+            {sigMsg.text}
+          </p>
+        )}
+        {sigMode ? (
+          <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 space-y-3">
+            <textarea value={sig} onChange={(e) => setSig(e.target.value)} rows={4}
+              placeholder={"Ej:\nJuan Pablo Morales\nSoporte TI — Altra Investments\njmorales@altrainv.com | +57 300 000 0000"}
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+            <p className="text-slate-600 text-xs">{sig.length} / 500 caracteres</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setSigMode(false)}
+                className="bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm px-4 py-2 rounded-lg transition-colors">Cancelar</button>
+              <button onClick={() => updateSignature.mutate({ signature: sig })}
+                disabled={updateSignature.isPending || sig.length > 500}
+                className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 text-white text-sm px-4 py-2 rounded-lg transition-colors">
+                {updateSignature.isPending ? "Guardando..." : "Guardar firma"}
+              </button>
+            </div>
+          </div>
+        ) : profile?.emailSignature ? (
+          <div className="px-4 py-3 bg-slate-900 rounded-xl border border-slate-800">
+            <p className="text-slate-400 text-sm whitespace-pre-wrap leading-relaxed">{profile.emailSignature}</p>
+          </div>
+        ) : (
+          <div className="px-4 py-3 bg-slate-900 rounded-xl border border-dashed border-slate-700 text-center">
+            <p className="text-slate-600 text-sm">Sin firma configurada</p>
           </div>
         )}
       </div>

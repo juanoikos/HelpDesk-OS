@@ -32,27 +32,51 @@ const impactEnum   = z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
 const channelEnum  = z.enum(["WEB", "EMAIL", "WHATSAPP", "PHONE"]);
 
 export const ticketsRouter = router({
-  // ── Lista con filtros opcionales ──────────────────────────────────────────
+  // ── Lista con filtros ────────────────────────────────────────────────────
   list: protectedProcedure
     .input(
       z.object({
-        status:     statusEnum.optional(),
-        priority:   priorityEnum.optional(),
-        type:       typeEnum.optional(),
-        categoryId: z.string().optional(),
+        status:       statusEnum.optional(),
+        priority:     priorityEnum.optional(),
+        type:         typeEnum.optional(),
+        categoryId:   z.string().optional(),
+        // Filtros avanzados
+        search:       z.string().optional(),   // busca en título o número
+        assignedToId: z.string().optional(),   // agente asignado
+        groupId:      z.string().optional(),   // grupo
+        dateFrom:     z.string().optional(),   // ISO date string
+        dateTo:       z.string().optional(),   // ISO date string
       }).optional()
     )
     .query(async ({ input, ctx }) => {
       const tenantId  = ctx.session.user.tenantId;
       const isEndUser = ctx.session.user.role === "USER";
+
+      // Búsqueda por número (#001) o texto en título
+      const searchNum = input?.search ? parseInt(input.search.replace(/\D/g, "")) : NaN;
+
       return prisma.ticket.findMany({
         where: {
           tenantId,
           ...(isEndUser ? { createdById: ctx.session.user.id } : {}),
-          ...(input?.status     ? { status:     input.status }     : {}),
-          ...(input?.priority   ? { priority:   input.priority }   : {}),
-          ...(input?.type       ? { type:       input.type }       : {}),
-          ...(input?.categoryId ? { categoryId: input.categoryId } : {}),
+          ...(input?.status       ? { status:       input.status }       : {}),
+          ...(input?.priority     ? { priority:     input.priority }     : {}),
+          ...(input?.type         ? { type:         input.type }         : {}),
+          ...(input?.categoryId   ? { categoryId:   input.categoryId }   : {}),
+          ...(input?.assignedToId ? { assignedToId: input.assignedToId } : {}),
+          ...(input?.groupId      ? { groupId:      input.groupId }      : {}),
+          ...(input?.dateFrom || input?.dateTo ? {
+            createdAt: {
+              ...(input.dateFrom ? { gte: new Date(input.dateFrom) } : {}),
+              ...(input.dateTo   ? { lte: new Date(input.dateTo)   } : {}),
+            },
+          } : {}),
+          ...(input?.search ? {
+            OR: [
+              { title: { contains: input.search, mode: "insensitive" } },
+              ...(!isNaN(searchNum) ? [{ number: searchNum }] : []),
+            ],
+          } : {}),
         },
         include: {
           category:   true,
@@ -313,10 +337,16 @@ export const ticketsRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const ticket = await prisma.ticket.findFirst({
-        where:   { id: input.ticketId, tenantId: ctx.session.user.tenantId },
-        include: WITH_EMAIL,
-      });
+      const [ticket, author] = await Promise.all([
+        prisma.ticket.findFirst({
+          where:   { id: input.ticketId, tenantId: ctx.session.user.tenantId },
+          include: WITH_EMAIL,
+        }),
+        prisma.user.findUnique({
+          where:  { id: ctx.session.user.id },
+          select: { emailSignature: true },
+        }),
+      ]);
       if (!ticket) throw new TRPCError({ code: "NOT_FOUND" });
 
       const message = await prisma.ticketMessage.create({
@@ -334,7 +364,7 @@ export const ticketsRouter = router({
 
       // Notificar respuesta pública al solicitante (fire-and-forget)
       if (!input.isInternal) {
-        notifyNewReply(ticket, input.body, authorName).catch(console.error);
+        notifyNewReply(ticket, input.body, authorName, author?.emailSignature).catch(console.error);
       }
 
       // Notificar al agente asignado cuando no es él mismo quien escribe

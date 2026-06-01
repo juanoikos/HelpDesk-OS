@@ -278,9 +278,15 @@ export async function notifyStatusChanged(t: TicketBasic, newStatus: string) {
 
 // ─── 3. Respuesta pública nueva ───────────────────────────────────────────────
 
-export async function notifyNewReply(t: TicketBasic, replyBody: string, agentName: string) {
+export async function notifyNewReply(t: TicketBasic, replyBody: string, agentName: string, signature?: string | null) {
   const to = recipientEmail(t);
   if (!to) return;
+
+  const signatureHtml = signature
+    ? `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0 0">
+        <tr><td style="border-top:1px solid #334155;padding:12px 0 0;color:#64748b;font-size:12px;line-height:1.6;white-space:pre-wrap">${signature.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td></tr>
+       </table>`
+    : "";
 
   await getResend().emails.send({
     from: FROM(),
@@ -299,6 +305,7 @@ export async function notifyNewReply(t: TicketBasic, replyBody: string, agentNam
           </td>
         </tr>
       </table>
+      ${signatureHtml}
       ${ticketCard(t)}
       ${btn("Ver conversación", ticketUrl(t.id))}
     `),

@@ -2,7 +2,7 @@
 
 import { trpc } from "@/trpc/react";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 
 // ─── Configuración visual ─────────────────────────────────────────────────────
@@ -60,7 +60,15 @@ const OPEN_STATUSES = ["NEW","ASSIGNED","IN_DIAGNOSIS","IN_ANALYSIS","IN_PROGRES
 
 export default function TicketsPage() {
   const searchParams = useSearchParams();
-  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+  const [statusFilter,   setStatusFilter]   = useState<string | undefined>(undefined);
+  const [search,         setSearch]         = useState("");
+  const [assignedToId,   setAssignedToId]   = useState("");
+  const [groupId,        setGroupId]        = useState("");
+  const [dateRange,      setDateRange]      = useState("");
+  const [showFilters,    setShowFilters]    = useState(false);
+
+  const { data: agents } = trpc.tickets.listAgents.useQuery();
+  const { data: groups } = trpc.teams.groups.list.useQuery();
 
   // Leer filtro inicial desde URL (?status=IN_PROGRESS o ?status=open)
   useEffect(() => {
@@ -69,26 +77,40 @@ export default function TicketsPage() {
     else setStatusFilter(s);
   }, [searchParams]);
 
-  // "open" es un filtro especial del dashboard → no se pasa al router (se filtra en cliente)
+  // Calcular rango de fechas
+  const dateFrom = dateRange === "7d"  ? new Date(Date.now() - 7  * 86400000).toISOString()
+                 : dateRange === "30d" ? new Date(Date.now() - 30 * 86400000).toISOString()
+                 : dateRange === "90d" ? new Date(Date.now() - 90 * 86400000).toISOString()
+                 : undefined;
+
   const queryStatus = (!statusFilter || statusFilter === "open")
     ? undefined
     : statusFilter as "NEW"|"ASSIGNED"|"IN_DIAGNOSIS"|"IN_ANALYSIS"|"IN_PROGRESS"|"WAITING"|"PENDING_USER"|"PENDING_PROVIDER"|"ESCALATED"|"RESOLVED"|"CLOSED";
 
+  const queryInput = {
+    ...(queryStatus    ? { status:       queryStatus }    : {}),
+    ...(search.trim()  ? { search:       search.trim() }  : {}),
+    ...(assignedToId   ? { assignedToId }                 : {}),
+    ...(groupId        ? { groupId }                      : {}),
+    ...(dateFrom       ? { dateFrom }                     : {}),
+  };
+
   const { data: rawTickets, isLoading } = trpc.tickets.list.useQuery(
-    queryStatus ? { status: queryStatus } : undefined
+    Object.keys(queryInput).length ? queryInput : undefined
   );
 
-  // Si el filtro es "open", filtrar en cliente los estados abiertos
   const tickets = statusFilter === "open"
     ? rawTickets?.filter((t) => OPEN_STATUSES.includes(t.status))
     : rawTickets;
 
-  // Conteos para los tabs
+  // Conteos para los tabs (sin filtros de búsqueda)
   const { data: all } = trpc.tickets.list.useQuery(undefined);
   const counts = (all ?? []).reduce<Record<string, number>>((acc, t) => {
     acc[t.status] = (acc[t.status] ?? 0) + 1;
     return acc;
   }, {});
+
+  const hasActiveFilters = search || assignedToId || groupId || dateRange;
 
   return (
     <div>
@@ -106,6 +128,72 @@ export default function TicketsPage() {
         >
           + Nuevo ticket
         </Link>
+      </div>
+
+      {/* Barra de búsqueda + filtros avanzados */}
+      <div className="mb-4 space-y-2">
+        <div className="flex gap-2">
+          <div className="relative flex-1 max-w-sm">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">🔍</span>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por título o #número..."
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs">✕</button>
+            )}
+          </div>
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-colors ${
+              hasActiveFilters
+                ? "border-blue-600 bg-blue-950 text-blue-300"
+                : "border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            ⚙ Filtros {hasActiveFilters && <span className="bg-blue-600 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">!</span>}
+          </button>
+          {hasActiveFilters && (
+            <button onClick={() => { setSearch(""); setAssignedToId(""); setGroupId(""); setDateRange(""); }}
+              className="px-3 py-2 rounded-xl border border-slate-700 text-slate-500 hover:text-slate-300 text-sm transition-colors">
+              Limpiar
+            </button>
+          )}
+        </div>
+
+        {showFilters && (
+          <div className="flex gap-3 flex-wrap bg-slate-900 border border-slate-800 rounded-xl p-3">
+            <div className="flex flex-col gap-1 min-w-[160px]">
+              <label className="text-xs text-slate-500">Agente asignado</label>
+              <select value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded-lg text-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                <option value="">Todos</option>
+                <option value="unassigned">Sin asignar</option>
+                {agents?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 min-w-[160px]">
+              <label className="text-xs text-slate-500">Grupo</label>
+              <select value={groupId} onChange={(e) => setGroupId(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded-lg text-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                <option value="">Todos</option>
+                {groups?.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 min-w-[160px]">
+              <label className="text-xs text-slate-500">Período</label>
+              <select value={dateRange} onChange={(e) => setDateRange(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded-lg text-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                <option value="">Todos los tiempos</option>
+                <option value="7d">Últimos 7 días</option>
+                <option value="30d">Últimos 30 días</option>
+                <option value="90d">Últimos 90 días</option>
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Tabs de filtro */}
