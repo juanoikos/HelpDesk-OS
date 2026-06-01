@@ -528,7 +528,16 @@ export default function TicketDetailPage() {
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-500">Escribir respuesta</span>
                 <div className="flex items-center gap-2">
-                  <CannedResponsePicker onSelect={(text) => setReply((prev) => prev ? prev + "\n\n" + text : text)} />
+                  <CannedResponsePicker
+                    onSelect={(text) => setReply((prev) => prev ? prev + "\n\n" + text : text)}
+                    ticketCtx={{
+                      requesterName: ticket.requesterName ?? ticket.createdBy.name,
+                      number:        ticket.number,
+                      title:         ticket.title,
+                      agentName:     me?.name ?? "",
+                      tenantName:    ticket.createdBy.name,
+                    }}
+                  />
                   <button onClick={() => setIsInternal((v) => !v)}
                     className={`text-xs px-3 py-1 rounded-lg border transition-colors ${isInternal
                       ? "border-amber-700 bg-amber-900/40 text-amber-300"
@@ -599,7 +608,27 @@ export default function TicketDetailPage() {
 
 // ─── Picker de respuestas predefinidas ───────────────────────────────────────
 
-function CannedResponsePicker({ onSelect }: { onSelect: (text: string) => void }) {
+type TicketContext = {
+  requesterName: string;
+  number:        number;
+  title:         string;
+  agentName:     string;
+  tenantName:    string;
+};
+
+function resolveVariables(text: string, ctx: TicketContext): string {
+  return text
+    .replace(/\{nombre\}/gi,    ctx.requesterName)
+    .replace(/\{numero\}/gi,    `#${String(ctx.number).padStart(3, "0")}`)
+    .replace(/\{titulo\}/gi,    ctx.title)
+    .replace(/\{agente\}/gi,    ctx.agentName)
+    .replace(/\{empresa\}/gi,   ctx.tenantName);
+}
+
+function CannedResponsePicker({ onSelect, ticketCtx }: {
+  onSelect:  (text: string) => void;
+  ticketCtx: TicketContext;
+}) {
   const { data: items } = trpc.cannedResponses.list.useQuery();
   const [open, setOpen]   = useState(false);
   const [search, setSearch] = useState("");
@@ -638,10 +667,10 @@ function CannedResponsePicker({ onSelect }: { onSelect: (text: string) => void }
               ) : (
                 filtered.map((item: { id: string; title: string; body: string }) => (
                   <button key={item.id} type="button"
-                    onClick={() => { onSelect(item.body); setOpen(false); }}
+                    onClick={() => { onSelect(resolveVariables(item.body, ticketCtx)); setOpen(false); }}
                     className="w-full text-left px-4 py-3 hover:bg-slate-800 transition-colors border-b border-slate-800/50 last:border-0">
                     <p className="text-slate-200 text-xs font-medium">{item.title}</p>
-                    <p className="text-slate-500 text-xs mt-0.5 line-clamp-1">{item.body}</p>
+                    <p className="text-slate-500 text-xs mt-0.5 line-clamp-1">{resolveVariables(item.body, ticketCtx)}</p>
                   </button>
                 ))
               )}

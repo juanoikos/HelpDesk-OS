@@ -879,7 +879,16 @@ function CannedResponsesSection() {
             <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={5}
               placeholder="Escribe el texto completo que se insertará al usar esta respuesta..."
               className={inputCls + " resize-none"} />
-            <p className="text-slate-600 text-xs mt-1">{body.length} caracteres</p>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {["{nombre}","{numero}","{titulo}","{agente}","{empresa}"].map((v) => (
+                <button key={v} type="button"
+                  onClick={() => setBody((p) => p + v)}
+                  className="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded transition-colors font-mono">
+                  {v}
+                </button>
+              ))}
+              <span className="text-slate-600 text-xs self-center ml-1">← variables disponibles</span>
+            </div>
           </div>
           {err && <p className="text-red-400 text-xs">{err}</p>}
           <div className="flex gap-2">
