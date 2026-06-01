@@ -229,6 +229,20 @@ model Asset {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
+  // Agent-collected hardware fields
+  hostname     String?
+  username     String?
+  ipAddress    String?
+  macAddress   String?
+  osName       String?
+  cpu          String?
+  ramGB        Int?
+  diskInfo     String?
+  motherboard  String?
+  agentVersion String?
+  lastSeenAt   DateTime?
+  hardwareData Json?
+
   tenant  Tenant   @relation(fields: [tenantId], references: [id])
   tickets Ticket[]
 
@@ -304,6 +318,7 @@ model TenantSettings {
   tenantId        String   @unique
   userViewConfig  Json     @default("{}")
   agentViewConfig Json     @default("{}")
+  agentToken      String?  // unique token for agent authentication
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
