@@ -98,6 +98,7 @@ export default function TicketDetailPage() {
   const ticketId = params.id as string;
   const utils    = trpc.useUtils();
 
+  const { data: me }                = trpc.tickets.me.useQuery();
   const { data: ticket, isLoading } = trpc.tickets.getById.useQuery({ id: ticketId });
   const { data: agents }            = trpc.tickets.listAgents.useQuery();
   const { data: groups }            = trpc.teams.groups.list.useQuery();
@@ -108,11 +109,13 @@ export default function TicketDetailPage() {
 
   const invalidate = () => utils.tickets.getById.invalidate({ id: ticketId });
 
-  const updateStatus  = trpc.tickets.updateStatus.useMutation({ onSuccess: invalidate });
-  const assign        = trpc.tickets.assign.useMutation({ onSuccess: invalidate });
-  const assignGroup   = trpc.tickets.assignGroup.useMutation({ onSuccess: invalidate });
-  const saveSolution  = trpc.tickets.saveSolution.useMutation({ onSuccess: invalidate });
-  const addMessage    = trpc.tickets.addMessage.useMutation({
+  const updateStatus   = trpc.tickets.updateStatus.useMutation({ onSuccess: invalidate });
+  const assign         = trpc.tickets.assign.useMutation({ onSuccess: invalidate });
+  const assignGroup    = trpc.tickets.assignGroup.useMutation({ onSuccess: invalidate });
+  const saveSolution   = trpc.tickets.saveSolution.useMutation({ onSuccess: invalidate });
+  const approveClosure = trpc.tickets.approveClosure.useMutation({ onSuccess: invalidate });
+  const rejectClosure  = trpc.tickets.rejectClosure.useMutation({ onSuccess: invalidate });
+  const addMessage     = trpc.tickets.addMessage.useMutation({
     onSuccess: () => { setReply(""); invalidate(); },
   });
 
@@ -137,11 +140,13 @@ export default function TicketDetailPage() {
     if (attachFiles.length > 0) await handleUploadFiles(attachFiles);
   };
 
-  const [reply,        setReply]        = useState("");
-  const [isInternal,   setIsInternal]   = useState(false);
-  const [solution,     setSolution]     = useState("");
-  const [showSolution, setShowSolution] = useState(false);
-  const [closeWarning, setCloseWarning] = useState(false);
+  const [reply,         setReply]        = useState("");
+  const [isInternal,    setIsInternal]   = useState(false);
+  const [solution,      setSolution]     = useState("");
+  const [showSolution,  setShowSolution] = useState(false);
+  const [closeWarning,  setCloseWarning] = useState(false);
+  const [rejectReason,  setRejectReason] = useState("");
+  const [showReject,    setShowReject]   = useState(false);
   const [attachFiles,  setAttachFiles]  = useState<File[]>([]);
   const [uploading,    setUploading]    = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -431,7 +436,80 @@ export default function TicketDetailPage() {
         </div>
       )}
 
-      {/* ── 6. Respuesta / solución ── */}
+      {/* ── 6. Banner de aprobación de cierre ── */}
+      {ticket.status === "RESOLVED" && (
+        <div className={`border rounded-2xl p-5 ${
+          me?.id === ticket.createdBy.id
+            ? "bg-blue-950/40 border-blue-800/60"
+            : "bg-slate-900 border-slate-700"
+        }`}>
+          {me?.id === ticket.createdBy.id ? (
+            // ── Vista del usuario que creó el ticket ──
+            <>
+              <div className="flex items-start gap-3 mb-4">
+                <span className="text-2xl">🔔</span>
+                <div>
+                  <p className="text-blue-300 font-semibold text-sm">El equipo indica que tu solicitud fue resuelta</p>
+                  <p className="text-slate-400 text-xs mt-1">¿El problema quedó resuelto? Confirma para cerrar el ticket o indícanos que sigue el problema.</p>
+                </div>
+              </div>
+
+              {!showReject ? (
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => approveClosure.mutate({ id: ticketId })}
+                    disabled={approveClosure.isPending}
+                    className="flex-1 bg-green-700 hover:bg-green-600 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium py-2.5 rounded-xl text-sm transition-colors">
+                    {approveClosure.isPending ? "Cerrando..." : "✅ Sí, está resuelto — cerrar ticket"}
+                  </button>
+                  <button
+                    onClick={() => setShowReject(true)}
+                    className="flex-1 bg-slate-800 hover:bg-red-950 border border-slate-700 hover:border-red-800 text-slate-300 hover:text-red-300 font-medium py-2.5 rounded-xl text-sm transition-colors">
+                    ❌ No, el problema persiste
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-slate-300 text-xs">Cuéntanos qué sigue fallando para que el equipo retome la atención:</p>
+                  <textarea
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    rows={3}
+                    placeholder="Ej: El sistema aún muestra el mismo error, la impresora sigue sin conectarse..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                  />
+                  {rejectClosure.error && <p className="text-red-400 text-xs">{rejectClosure.error.message}</p>}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => rejectClosure.mutate({ id: ticketId, reason: rejectReason })}
+                      disabled={rejectReason.trim().length < 5 || rejectClosure.isPending}
+                      className="bg-red-700 hover:bg-red-600 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium px-5 py-2 rounded-xl text-sm transition-colors">
+                      {rejectClosure.isPending ? "Enviando..." : "Enviar y reabrir"}
+                    </button>
+                    <button onClick={() => setShowReject(false)}
+                      className="bg-slate-800 hover:bg-slate-700 text-slate-400 px-4 py-2 rounded-xl text-sm transition-colors">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            // ── Vista del agente / admin ──
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse flex-shrink-0" />
+              <div>
+                <p className="text-slate-300 text-sm font-medium">Esperando confirmación del solicitante</p>
+                <p className="text-slate-500 text-xs mt-0.5">
+                  Se envió un email a <span className="text-slate-400">{ticket.createdBy.name}</span> para que apruebe el cierre.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 7. Respuesta / solución ── */}
       {!isClosed ? (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
           <div className="flex gap-2">

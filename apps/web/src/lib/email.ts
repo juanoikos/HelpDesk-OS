@@ -388,7 +388,41 @@ export async function notifyInvitation(
   }).catch(console.error);
 }
 
-// ─── 6. Ticket resuelto ───────────────────────────────────────────────────────
+// ─── 6. Solicitud de aprobación de cierre ────────────────────────────────────
+
+export async function notifyClosureApprovalRequired(t: TicketBasic, solution: string) {
+  const to = recipientEmail(t);
+  if (!to) return;
+
+  await getResend().emails.send({
+    from:    FROM(),
+    to,
+    subject: subject(t, `¿Podemos cerrar tu ticket? — ${t.title}`),
+    html: baseHtml(`
+      <h2 style="color:#60a5fa;font-size:20px;font-weight:700;margin:0 0 8px">Tu solicitud fue atendida</h2>
+      <p style="color:#94a3b8;font-size:14px;margin:0 0 16px;line-height:1.6">
+        Hola <strong style="color:#e2e8f0">${recipientName(t)}</strong>,
+        el equipo de soporte indica que tu solicitud fue resuelta.<br>
+        Por favor revisa la solución y confirma si el problema quedó resuelto.
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px">
+        <tr>
+          <td style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px 18px">
+            <p style="color:#64748b;font-size:11px;font-weight:600;margin:0 0 6px;text-transform:uppercase">Solución aplicada</p>
+            <p style="color:#cbd5e1;font-size:14px;line-height:1.6;margin:0;white-space:pre-wrap">${solution.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>
+          </td>
+        </tr>
+      </table>
+      ${ticketCard(t)}
+      <p style="color:#94a3b8;font-size:13px;margin:16px 0 0;line-height:1.5">
+        Entra al ticket para confirmar el cierre o indicar que el problema persiste.
+      </p>
+      ${btn("Ver ticket y responder", ticketUrl(t.id))}
+    `),
+  }).catch(console.error);
+}
+
+// ─── 7. Ticket resuelto ───────────────────────────────────────────────────────
 
 export async function notifyResolved(t: TicketBasic, solution: string) {
   const to = recipientEmail(t);

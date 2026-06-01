@@ -8,6 +8,7 @@ import {
   notifyNewReply,
   notifyResolved,
   notifyAgentActivity,
+  notifyClosureApprovalRequired,
 } from "@/lib/email";
 
 // ─── Selector reutilizable para emails ───────────────────────────────────────
@@ -216,20 +217,69 @@ export const ticketsRouter = router({
       return ticket;
     }),
 
-  // ── Guardar solución ──────────────────────────────────────────────────────
+  // ── Guardar solución (queda en RESOLVED esperando aprobación del usuario) ──
   saveSolution: protectedProcedure
     .input(z.object({ id: z.string(), solution: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
       const ticket = await prisma.ticket.update({
         where: { id: input.id, tenantId: ctx.session.user.tenantId },
-        data: { solution: input.solution, status: "RESOLVED" },
+        data:  { solution: input.solution, status: "RESOLVED" },
         include: WITH_EMAIL,
       });
 
-      // Notificar resolución con solución incluida (fire-and-forget)
-      notifyResolved(ticket, input.solution).catch(console.error);
+      // Notificar al usuario que debe aprobar el cierre
+      notifyClosureApprovalRequired(ticket, input.solution).catch(console.error);
 
       return ticket;
+    }),
+
+  // ── Aprobar cierre (usuario confirma que el problema está resuelto) ────────
+  approveClosure: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const ticket = await prisma.ticket.findFirst({
+        where:  { id: input.id, tenantId: ctx.session.user.tenantId },
+        select: { status: true, solution: true, createdById: true },
+      });
+      if (!ticket) throw new TRPCError({ code: "NOT_FOUND" });
+      if (ticket.status !== "RESOLVED")
+        throw new TRPCError({ code: "BAD_REQUEST", message: "El ticket no está en estado Resuelto" });
+
+      return prisma.ticket.update({
+        where: { id: input.id, tenantId: ctx.session.user.tenantId },
+        data:  { status: "CLOSED", closedAt: new Date() },
+      });
+    }),
+
+  // ── Rechazar cierre (usuario indica que el problema persiste) ─────────────
+  rejectClosure: protectedProcedure
+    .input(z.object({ id: z.string(), reason: z.string().min(5, "Por favor describe el problema") }))
+    .mutation(async ({ input, ctx }) => {
+      const ticket = await prisma.ticket.findFirst({
+        where:  { id: input.id, tenantId: ctx.session.user.tenantId },
+        select: { status: true, createdById: true },
+      });
+      if (!ticket) throw new TRPCError({ code: "NOT_FOUND" });
+      if (ticket.status !== "RESOLVED")
+        throw new TRPCError({ code: "BAD_REQUEST", message: "El ticket no está en estado Resuelto" });
+
+      // Reabrir el ticket y registrar el motivo como mensaje
+      await prisma.ticket.update({
+        where: { id: input.id, tenantId: ctx.session.user.tenantId },
+        data:  { status: "IN_PROGRESS", solution: null },
+      });
+
+      await prisma.ticketMessage.create({
+        data: {
+          ticketId:   input.id,
+          userId:     ctx.session.user.id,
+          body:       `❌ Cierre rechazado por el solicitante:\n\n${input.reason}`,
+          isInternal: false,
+          channel:    "WEB",
+        },
+      });
+
+      return { ok: true };
     }),
 
   // ── Asignar agente ────────────────────────────────────────────────────────
