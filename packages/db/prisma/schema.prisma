@@ -21,14 +21,15 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users       User[]
-  tickets     Ticket[]
-  assets      Asset[]
-  categories  Category[]
-  channels    Channel[]
-  groups      Group[]
-  invitations UserInvitation[]
-  settings    TenantSettings?
+  users           User[]
+  tickets         Ticket[]
+  assets          Asset[]
+  categories      Category[]
+  channels        Channel[]
+  groups          Group[]
+  invitations     UserInvitation[]
+  settings        TenantSettings?
+  cannedResponses CannedResponse[]
 
   @@map("tenants")
 }
@@ -154,6 +155,21 @@ enum Priority {
   MEDIUM
   HIGH
   URGENT
+}
+
+// ─── Respuestas predefinidas ──────────────────────────────────────────────────
+
+model CannedResponse {
+  id        String   @id @default(cuid())
+  tenantId  String
+  title     String   // nombre corto visible en el picker
+  body      String   // texto completo de la respuesta
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("canned_responses")
 }
 
 // ─── Adjuntos de Ticket ───────────────────────────────────────────────────────

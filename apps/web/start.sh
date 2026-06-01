@@ -59,6 +59,18 @@ CREATE TABLE IF NOT EXISTS "ticket_attachments" (
   CONSTRAINT "ticket_attachments_ticketId_fkey"
     FOREIGN KEY ("ticketId") REFERENCES "tickets"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS "canned_responses" (
+  "id"        TEXT         NOT NULL,
+  "tenantId"  TEXT         NOT NULL,
+  "title"     TEXT         NOT NULL,
+  "body"      TEXT         NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "canned_responses_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "canned_responses_tenantId_fkey"
+    FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
 SQL
 
 echo "▶ Iniciando HelpDesk OS..."

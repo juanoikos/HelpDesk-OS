@@ -449,12 +449,15 @@ export default function TicketDetailPage() {
             <>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-500">Escribir respuesta</span>
-                <button onClick={() => setIsInternal((v) => !v)}
-                  className={`text-xs px-3 py-1 rounded-lg border transition-colors ${isInternal
-                    ? "border-amber-700 bg-amber-900/40 text-amber-300"
-                    : "border-slate-700 text-slate-500 hover:text-slate-300"}`}>
-                  {isInternal ? "🔒 Nota interna" : "🌐 Respuesta pública"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <CannedResponsePicker onSelect={(text) => setReply((prev) => prev ? prev + "\n\n" + text : text)} />
+                  <button onClick={() => setIsInternal((v) => !v)}
+                    className={`text-xs px-3 py-1 rounded-lg border transition-colors ${isInternal
+                      ? "border-amber-700 bg-amber-900/40 text-amber-300"
+                      : "border-slate-700 text-slate-500 hover:text-slate-300"}`}>
+                    {isInternal ? "🔒 Nota interna" : "🌐 Respuesta pública"}
+                  </button>
+                </div>
               </div>
               <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={4}
                 placeholder={isInternal ? "Nota interna (solo visible para el equipo)..." : "Escribe tu respuesta al usuario..."}
@@ -511,6 +514,62 @@ export default function TicketDetailPage() {
             Reabrir
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Picker de respuestas predefinidas ───────────────────────────────────────
+
+function CannedResponsePicker({ onSelect }: { onSelect: (text: string) => void }) {
+  const { data: items } = trpc.cannedResponses.list.useQuery();
+  const [open, setOpen]   = useState(false);
+  const [search, setSearch] = useState("");
+
+  if (!items?.length) return null;
+
+  const filtered = items.filter((i: { id: string; title: string; body: string }) =>
+    i.title.toLowerCase().includes(search.toLowerCase()) ||
+    i.body.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => { setOpen((v) => !v); setSearch(""); }}
+        className="text-xs px-3 py-1 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors">
+        💬 Respuestas rápidas
+      </button>
+
+      {open && (
+        <>
+          {/* Overlay para cerrar al hacer clic fuera */}
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 bottom-8 z-20 w-80 bg-slate-900 border border-slate-700 rounded-2xl shadow-xl overflow-hidden">
+            <div className="p-3 border-b border-slate-800">
+              <input
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar respuesta..."
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div className="max-h-60 overflow-y-auto">
+              {filtered.length === 0 ? (
+                <p className="text-slate-600 text-xs text-center py-4">Sin resultados</p>
+              ) : (
+                filtered.map((item: { id: string; title: string; body: string }) => (
+                  <button key={item.id} type="button"
+                    onClick={() => { onSelect(item.body); setOpen(false); }}
+                    className="w-full text-left px-4 py-3 hover:bg-slate-800 transition-colors border-b border-slate-800/50 last:border-0">
+                    <p className="text-slate-200 text-xs font-medium">{item.title}</p>
+                    <p className="text-slate-500 text-xs mt-0.5 line-clamp-1">{item.body}</p>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

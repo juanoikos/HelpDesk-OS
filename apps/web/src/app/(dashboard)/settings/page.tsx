@@ -47,7 +47,7 @@ const AGENT_VIEW_FIELDS = [
   { key: "diagnosis",        label: "Diagnóstico",              desc: "Causa técnica" },
 ];
 
-type Tab = "perfil" | "categorias" | "equipo" | "vistas" | "canales";
+type Tab = "perfil" | "categorias" | "equipo" | "vistas" | "canales" | "respuestas";
 
 // ─── Mi perfil ────────────────────────────────────────────────────────────────
 
@@ -705,7 +705,8 @@ export default function SettingsPage() {
     { key: "categorias", label: "Categorías",       icon: "🏷️",  adminOnly: true },
     { key: "equipo",     label: "Equipo",           icon: "👥",  adminOnly: true },
     { key: "vistas",     label: "Vistas de ticket", icon: "🎛️",  adminOnly: true },
-    { key: "canales",    label: "Canales",           icon: "📡",  adminOnly: true },
+    { key: "canales",    label: "Canales",            icon: "📡",  adminOnly: true },
+    { key: "respuestas", label: "Respuestas rápidas", icon: "💬",  adminOnly: true },
   ];
 
   const visibleTabs = TABS.filter((t) => !t.adminOnly || isAdmin);
@@ -732,6 +733,146 @@ export default function SettingsPage() {
       {tab === "equipo"     && <TeamSection />}
       {tab === "vistas"     && <TicketViewsSection />}
       {tab === "canales"    && <ChannelsSection />}
+      {tab === "respuestas" && <CannedResponsesSection />}
+    </div>
+  );
+}
+
+// ─── Respuestas predefinidas ──────────────────────────────────────────────────
+
+function CannedResponsesSection() {
+  const utils = trpc.useUtils();
+  const { data: items, isLoading } = trpc.cannedResponses.list.useQuery();
+
+  const [showForm, setShowForm]   = useState(false);
+  const [editId,   setEditId]     = useState<string | null>(null);
+  const [title,    setTitle]      = useState("");
+  const [body,     setBody]       = useState("");
+  const [err,      setErr]        = useState<string | null>(null);
+
+  const inputCls  = "w-full bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+
+  const invalidate = () => utils.cannedResponses.list.invalidate();
+
+  const create = trpc.cannedResponses.create.useMutation({
+    onSuccess: () => { invalidate(); resetForm(); },
+    onError:   (e) => setErr(e.message),
+  });
+
+  const update = trpc.cannedResponses.update.useMutation({
+    onSuccess: () => { invalidate(); resetForm(); },
+    onError:   (e) => setErr(e.message),
+  });
+
+  const remove = trpc.cannedResponses.delete.useMutation({
+    onSuccess: invalidate,
+  });
+
+  function resetForm() {
+    setShowForm(false);
+    setEditId(null);
+    setTitle("");
+    setBody("");
+    setErr(null);
+  }
+
+  function startEdit(item: { id: string; title: string; body: string; createdAt: Date; updatedAt: Date; tenantId: string }) {
+    setEditId(item.id);
+    setTitle(item.title);
+    setBody(item.body);
+    setShowForm(true);
+    setErr(null);
+  }
+
+  function handleSave() {
+    if (!title.trim() || !body.trim()) { setErr("Título y texto son obligatorios"); return; }
+    if (editId) {
+      update.mutate({ id: editId, title: title.trim(), body: body.trim() });
+    } else {
+      create.mutate({ title: title.trim(), body: body.trim() });
+    }
+  }
+
+  if (isLoading) return <p className="text-slate-500 text-sm">Cargando...</p>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-white">Respuestas rápidas</h2>
+          <p className="text-slate-500 text-xs mt-0.5">Textos predefinidos que los agentes pueden insertar al responder tickets.</p>
+        </div>
+        {!showForm && (
+          <button onClick={() => { resetForm(); setShowForm(true); }}
+            className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors">
+            + Nueva respuesta
+          </button>
+        )}
+      </div>
+
+      {/* Formulario crear/editar */}
+      {showForm && (
+        <div className="bg-slate-900 border border-blue-800/50 rounded-2xl p-5 space-y-3">
+          <h3 className="text-sm font-semibold text-slate-200">{editId ? "Editar respuesta" : "Nueva respuesta"}</h3>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Título (nombre corto para identificarla)</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)}
+              placeholder="Ej: Solicitar más información, Ticket resuelto, Pendiente de proveedor..."
+              className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Texto de la respuesta</label>
+            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={5}
+              placeholder="Escribe el texto completo que se insertará al usar esta respuesta..."
+              className={inputCls + " resize-none"} />
+            <p className="text-slate-600 text-xs mt-1">{body.length} caracteres</p>
+          </div>
+          {err && <p className="text-red-400 text-xs">{err}</p>}
+          <div className="flex gap-2">
+            <button onClick={handleSave}
+              disabled={create.isPending || update.isPending}
+              className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm font-medium px-5 py-2 rounded-xl transition-colors">
+              {create.isPending || update.isPending ? "Guardando..." : editId ? "Guardar cambios" : "Crear respuesta"}
+            </button>
+            <button onClick={resetForm}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium px-4 py-2 rounded-xl transition-colors">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Lista */}
+      {!items?.length ? (
+        <div className="text-center py-12 text-slate-600 border border-dashed border-slate-800 rounded-2xl">
+          <p className="text-2xl mb-2">💬</p>
+          <p className="text-sm">No hay respuestas rápidas todavía.</p>
+          <p className="text-xs mt-1">Crea respuestas para que el equipo las use al atender tickets.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {items.map((item) => (
+            <div key={item.id}
+              className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-start gap-4 group">
+              <div className="flex-1 min-w-0">
+                <p className="text-slate-200 text-sm font-semibold">{item.title}</p>
+                <p className="text-slate-500 text-xs mt-1 line-clamp-2 leading-relaxed">{item.body}</p>
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                <button onClick={() => startEdit(item)}
+                  className="text-xs text-slate-500 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors">
+                  Editar
+                </button>
+                <button onClick={() => remove.mutate({ id: item.id })}
+                  disabled={remove.isPending}
+                  className="text-xs text-red-500 hover:text-red-400 bg-slate-800 hover:bg-red-950 px-3 py-1.5 rounded-lg transition-colors">
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
