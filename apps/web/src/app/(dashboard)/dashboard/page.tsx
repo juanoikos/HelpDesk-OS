@@ -78,25 +78,65 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      {/* Próximos bloques */}
+      {/* Hoja de ruta */}
       <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
-        <h2 className="text-white font-semibold mb-4">Hoja de ruta</h2>
-        <div className="space-y-3">
+        <h2 className="text-white font-semibold mb-1">Hoja de ruta</h2>
+        <p className="text-slate-500 text-xs mb-5">Estado real del sistema al {new Date().toLocaleDateString("es-CO", { day: "2-digit", month: "long", year: "numeric" })}</p>
+
+        {/* Completado */}
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">✅ Completado</p>
+        <div className="space-y-2 mb-6">
           {[
-            { bloque: "3", nombre: "Wizard de configuración con IA", estado: isConfigured ? "✓ completado" : "en curso" },
-            { bloque: "4", nombre: "Gestión de tickets", estado: "pendiente" },
-            { bloque: "5", nombre: "Recepción de tickets por email", estado: "pendiente" },
-            { bloque: "7", nombre: "WhatsApp", estado: "pendiente" },
-            { bloque: "9", nombre: "Deploy en Railway", estado: "pendiente" },
+            "Wizard de configuración con IA",
+            "Gestión completa de tickets (dos formularios: usuario y TI)",
+            "12 estados de ticket con flujo de trabajo",
+            "SLA automático por prioridad (colores en lista)",
+            "Adjuntos de archivos (Cloudflare R2)",
+            "Notificaciones email en cada evento del ticket",
+            "Aprobación de cierre por el usuario solicitante",
+            "Gestión de equipo: grupos, roles, invitaciones",
+            "Configuración avanzada (categorías, canales, vistas, respuestas rápidas)",
+            "Firma de email por agente",
+            "Filtros avanzados en lista de tickets",
+            "Deploy automático en Railway",
           ].map((item) => (
-            <div key={item.bloque} className="flex items-center gap-3 text-sm">
-              <span className="w-6 h-6 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-xs font-medium flex-shrink-0">
-                {item.bloque}
-              </span>
+            <div key={item} className="flex items-center gap-3 text-sm">
+              <span className="text-green-500 flex-shrink-0">✓</span>
+              <span className="text-slate-300">{item}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* En progreso */}
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">🔄 En progreso</p>
+        <div className="space-y-2 mb-6">
+          {[
+            { nombre: "App móvil (PWA — instalable en Android e iOS)", desc: "Próximo" },
+          ].map((item) => (
+            <div key={item.nombre} className="flex items-center gap-3 text-sm">
+              <span className="text-blue-400 flex-shrink-0">→</span>
               <span className="text-slate-300">{item.nombre}</span>
-              <span className={`ml-auto text-xs capitalize ${item.estado.startsWith("✓") ? "text-green-400" : item.estado === "en curso" ? "text-blue-400" : "text-slate-600"}`}>
-                {item.estado}
-              </span>
+              <span className="ml-auto text-xs text-blue-400">{item.desc}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Pendiente */}
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">⏳ Pendiente</p>
+        <div className="space-y-2">
+          {[
+            "Recepción de tickets por email (IMAP entrante)",
+            "Vista Kanban de tickets",
+            "Reportes y métricas (tiempo de resolución, SLA, por agente)",
+            "Inventario de activos (CRUD completo)",
+            "Respuestas predefinidas con variables dinámicas",
+            "WhatsApp (Baileys — canal gratuito)",
+            "Portal de autoservicio para usuarios finales",
+            "Base de conocimiento / FAQ desde soluciones",
+          ].map((item) => (
+            <div key={item} className="flex items-center gap-3 text-sm">
+              <span className="text-slate-600 flex-shrink-0">○</span>
+              <span className="text-slate-500">{item}</span>
             </div>
           ))}
         </div>
