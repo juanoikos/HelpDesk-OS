@@ -221,16 +221,17 @@ $devices = @()
 $total   = $activeIPs.Count
 $current = 0
 
-foreach ($ip in ($activeIPs | Sort-Object { [Version]$_ })) {
+foreach ($ipRaw in ($activeIPs | Sort-Object { try { [Version]$_ } catch { $_ } })) {
+    $ip = [string]$ipRaw   # forzar string para evitar System.Version objects
     $current++
     Write-Host "  [$current/$total] $ip..." -ForegroundColor DarkGray -NoNewline
 
-    $mac       = if ($macTable.ContainsKey($ip)) { $macTable[$ip] } else { $null }
-    $vendor    = if ($mac) { Get-Vendor $mac } else { "Desconocido" }
-    $openPorts = @()
+    $mac       = if ($macTable.ContainsKey($ip)) { [string]$macTable[$ip] } else { $null }
+    $vendor    = if ($mac) { [string](Get-Vendor $mac) } else { "Desconocido" }
+    $openPorts = [int[]]@()
 
     foreach ($port in $KEY_PORTS) {
-        if (Test-Port $ip $port) { $openPorts += $port }
+        if (Test-Port $ip $port) { $openPorts += [int]$port }
     }
 
     $httpTitle = $null
@@ -242,19 +243,19 @@ foreach ($ip in ($activeIPs | Sort-Object { [Version]$_ })) {
     $hostname = $null
     try {
         $dns      = [System.Net.Dns]::GetHostEntry($ip)
-        $hostname = $dns.HostName
+        $hostname = [string]$dns.HostName
     } catch {}
 
-    $deviceType = Get-DeviceType $vendor $openPorts $false
+    $deviceType = [string](Get-DeviceType $vendor $openPorts $false)
 
-    $devices += @{
-        ip         = $ip
-        mac        = $mac
-        vendor     = $vendor
-        hostname   = $hostname
-        deviceType = $deviceType
-        openPorts  = $openPorts
-        httpTitle  = $httpTitle
+    $devices += [PSCustomObject]@{
+        ip         = [string]$ip
+        mac        = if ($mac) { [string]$mac } else { $null }
+        vendor     = [string]$vendor
+        hostname   = if ($hostname) { [string]$hostname } else { $null }
+        deviceType = [string]$deviceType
+        openPorts  = @($openPorts | ForEach-Object { [int]$_ })
+        httpTitle  = if ($httpTitle) { [string]$httpTitle } else { $null }
         onvif      = $false
     }
 
@@ -302,14 +303,15 @@ try {
 } catch {}
 
 # Marcar dispositivos ONVIF descubiertos
-foreach ($ip in $onvifIPs) {
-    $device = $devices | Where-Object { $_.ip -eq $ip }
+foreach ($ipRaw in $onvifIPs) {
+    $ip = [string]$ipRaw
+    $device = $devices | Where-Object { $_.ip -eq $ip } | Select-Object -First 1
     if ($device) {
         $device.onvif      = $true
         $device.deviceType = "ip_camera"
     } else {
-        $devices += @{
-            ip         = $ip
+        $devices += [PSCustomObject]@{
+            ip         = [string]$ip
             mac        = $null
             vendor     = "Camara ONVIF"
             hostname   = $null
