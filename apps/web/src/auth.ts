@@ -25,12 +25,9 @@ const _nextAuth = NextAuth({
 
         const { email, password } = parsed.data;
 
-        // Si el mismo email existe en varios tenants (ej: invitado + creó empresa propia),
-        // se usa la cuenta más antigua (la del tenant al que fue invitado correctamente)
         const user = await prisma.user.findFirst({
-          where:   { email },
+          where: { email },
           include: { tenant: true },
-          orderBy: { createdAt: "asc" },
         });
 
         if (!user?.passwordHash) return null;
