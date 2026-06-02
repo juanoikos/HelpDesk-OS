@@ -4,6 +4,24 @@ import { prisma } from "@helpdesk-os/db";
 import { randomUUID } from "crypto";
 
 export async function GET(req: NextRequest) {
+  // ── Modo contenido: llamado desde el .bat con Bearer token ──────────────────
+  const authHeader = req.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const token    = authHeader.slice(7);
+    const settings = await prisma.tenantSettings.findFirst({ where: { agentToken: token } });
+    if (!settings) return NextResponse.json({ error: "Token inválido" }, { status: 401 });
+
+    const server = process.env.AUTH_URL ?? req.nextUrl.origin;
+    const script = PS1_SCANNER
+      .replace(/APP_URL_PLACEHOLDER/g, server)
+      .replace(/TOKEN_PLACEHOLDER/g,   token);
+
+    return new NextResponse(script, {
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+
+  // ── Modo descarga: llamado desde el navegador (sesión) ──────────────────────
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
@@ -11,7 +29,6 @@ export async function GET(req: NextRequest) {
 
   const tenantId = session.user.tenantId;
 
-  // Obtener o crear token
   let settings = await prisma.tenantSettings.findUnique({ where: { tenantId } });
   if (!settings?.agentToken) {
     settings = await prisma.tenantSettings.upsert({
@@ -24,14 +41,33 @@ export async function GET(req: NextRequest) {
   const token  = settings.agentToken!;
   const server = process.env.AUTH_URL ?? req.nextUrl.origin;
 
-  const script = PS1_SCANNER
-    .replace(/APP_URL_PLACEHOLDER/g, server)
-    .replace(/TOKEN_PLACEHOLDER/g,   token);
+  // ── Generar .bat que descarga y ejecuta el PS1 automáticamente ───────────────
+  // Esto evita el problema de política de ejecución al hacer doble clic
+  const bat = `@echo off
+chcp 65001 >nul
+title HelpDesk OS - Scanner de Red
+echo.
+echo  HelpDesk OS - Scanner de Red v1.0
+echo  =====================================
+echo.
+echo  Iniciando... por favor espera.
+echo.
+set "TMPPS1=%TEMP%\\helpdesk-scanner-%RANDOM%.ps1"
+powershell.exe -ExecutionPolicy Bypass -NoProfile -Command "$ProgressPreference='SilentlyContinue'; try { Invoke-WebRequest -Uri '${server}/api/agent/scanner' -Headers @{Authorization='Bearer ${token}'} -OutFile $env:TMPPS1 -UseBasicParsing } catch { Write-Host '  ERROR al descargar el script: ' $_.Exception.Message -ForegroundColor Red; pause; exit 1 }"
+if not exist "%TMPPS1%" (
+  echo  ERROR: No se pudo preparar el scanner.
+  echo  Verifica tu conexion a internet.
+  pause
+  exit /b 1
+)
+powershell.exe -ExecutionPolicy Bypass -NoProfile -File "%TMPPS1%"
+del "%TMPPS1%" 2>nul
+`;
 
-  return new NextResponse(script, {
+  return new NextResponse(bat, {
     headers: {
       "Content-Type":        "text/plain; charset=utf-8",
-      "Content-Disposition": `attachment; filename="helpdesk-scanner.ps1"`,
+      "Content-Disposition": `attachment; filename="helpdesk-scanner.bat"`,
     },
   });
 }

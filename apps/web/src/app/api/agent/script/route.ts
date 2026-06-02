@@ -1,9 +1,27 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@helpdesk-os/db";
 import { randomUUID } from "crypto";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // ── Modo contenido: llamado desde el .bat con Bearer token ──────────────────
+  const authHeader = req.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const token    = authHeader.slice(7);
+    const settings = await prisma.tenantSettings.findFirst({ where: { agentToken: token } });
+    if (!settings) return NextResponse.json({ error: "Token inválido" }, { status: 401 });
+
+    const appUrl = process.env.AUTH_URL ?? "http://localhost:3000";
+    const script = PS1_TEMPLATE
+      .replace(/APP_URL_PLACEHOLDER/g, appUrl)
+      .replace(/TOKEN_PLACEHOLDER/g,   token);
+
+    return new NextResponse(script, {
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+
+  // ── Modo descarga: llamado desde el navegador (sesión) ──────────────────────
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
@@ -11,7 +29,6 @@ export async function GET() {
 
   const tenantId = session.user.tenantId;
 
-  // Get or create agent token
   let settings = await prisma.tenantSettings.findUnique({ where: { tenantId } });
   if (!settings?.agentToken) {
     settings = await prisma.tenantSettings.upsert({
@@ -21,15 +38,35 @@ export async function GET() {
     });
   }
 
+  const token  = settings.agentToken!;
   const appUrl = process.env.AUTH_URL ?? "http://localhost:3000";
-  const script = PS1_TEMPLATE
-    .replace("APP_URL_PLACEHOLDER", appUrl)
-    .replace("TOKEN_PLACEHOLDER", settings.agentToken!);
 
-  return new NextResponse(script, {
+  // ── .bat que descarga y ejecuta el agente sin problemas de política ──────────
+  const bat = `@echo off
+chcp 65001 >nul
+title HelpDesk OS - Agente de inventario
+echo.
+echo  HelpDesk OS - Agente de inventario de hardware
+echo  =================================================
+echo.
+echo  Iniciando... por favor espera.
+echo.
+set "TMPPS1=%TEMP%\\helpdesk-agent-%RANDOM%.ps1"
+powershell.exe -ExecutionPolicy Bypass -NoProfile -Command "$ProgressPreference='SilentlyContinue'; try { Invoke-WebRequest -Uri '${appUrl}/api/agent/script' -Headers @{Authorization='Bearer ${token}'} -OutFile $env:TMPPS1 -UseBasicParsing } catch { Write-Host '  ERROR al descargar el script: ' $_.Exception.Message -ForegroundColor Red; pause; exit 1 }"
+if not exist "%TMPPS1%" (
+  echo  ERROR: No se pudo preparar el agente.
+  echo  Verifica tu conexion a internet.
+  pause
+  exit /b 1
+)
+powershell.exe -ExecutionPolicy Bypass -NoProfile -File "%TMPPS1%"
+del "%TMPPS1%" 2>nul
+`;
+
+  return new NextResponse(bat, {
     headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Content-Disposition": `attachment; filename="helpdesk-agent.ps1"`,
+      "Content-Type":        "text/plain; charset=utf-8",
+      "Content-Disposition": `attachment; filename="helpdesk-agent.bat"`,
     },
   });
 }
