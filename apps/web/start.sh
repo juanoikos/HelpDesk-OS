@@ -87,6 +87,28 @@ CREATE TABLE IF NOT EXISTS "canned_responses" (
   CONSTRAINT "canned_responses_tenantId_fkey"
     FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS "network_devices" (
+  "id"          TEXT         NOT NULL,
+  "tenantId"    TEXT         NOT NULL,
+  "scanId"      TEXT         NOT NULL,
+  "scannedFrom" TEXT         NOT NULL,
+  "subnet"      TEXT,
+  "ip"          TEXT         NOT NULL,
+  "mac"         TEXT,
+  "vendor"      TEXT,
+  "hostname"    TEXT,
+  "deviceType"  TEXT         NOT NULL DEFAULT 'unknown',
+  "openPorts"   JSONB,
+  "httpTitle"   TEXT,
+  "onvif"       BOOLEAN      NOT NULL DEFAULT false,
+  "lastSeenAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "createdAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "network_devices_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "network_devices_tenantId_ip_key" UNIQUE ("tenantId", "ip"),
+  CONSTRAINT "network_devices_tenantId_fkey"
+    FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
 SQL
 
 echo "▶ Iniciando HelpDesk OS..."

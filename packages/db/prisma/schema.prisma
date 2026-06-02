@@ -30,6 +30,7 @@ model Tenant {
   invitations     UserInvitation[]
   settings        TenantSettings?
   cannedResponses CannedResponse[]
+  networkDevices  NetworkDevice[]
 
   @@map("tenants")
 }
@@ -373,4 +374,29 @@ model UserInvitation {
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@map("user_invitations")
+}
+
+// ─── Dispositivos de Red (Network Discovery) ──────────────────────────────────
+
+model NetworkDevice {
+  id          String   @id @default(cuid())
+  tenantId    String
+  scanId      String
+  scannedFrom String
+  subnet      String?
+  ip          String
+  mac         String?
+  vendor      String?
+  hostname    String?
+  deviceType  String   @default("unknown")
+  openPorts   Json?
+  httpTitle   String?
+  onvif       Boolean  @default(false)
+  lastSeenAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, ip])
+  @@map("network_devices")
 }
