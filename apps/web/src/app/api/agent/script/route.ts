@@ -171,3 +171,24 @@ Write-Host ""
 Write-Host "  Presiona cualquier tecla para cerrar..."
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 `;
+
+const BAT_TEMPLATE = `@echo off
+chcp 65001 >nul
+echo.
+echo  HelpDesk OS - Agente de inventario de hardware
+echo  ===============================================
+echo.
+
+REM Verificar que el exe existe
+if not exist "%~dp0helpdesk-agent.exe" (
+    echo  ERROR: No se encuentra helpdesk-agent.exe
+    echo  Descarga el ejecutable desde HelpDesk OS ^> Activos ^> Descargar .exe
+    echo  y colócalo en la misma carpeta que este archivo.
+    echo.
+    pause
+    exit /b 1
+)
+
+REM Ejecutar agente con configuracion de la empresa
+"%~dp0helpdesk-agent.exe" --token "TOKEN_PLACEHOLDER" --server "APP_URL_PLACEHOLDER"
+`;
