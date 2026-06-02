@@ -186,7 +186,8 @@ function Test-Port($ip, $port, $timeoutMs = 400) {
 function Get-HttpTitle($ip, $port = 80) {
     try {
         $scheme = if ($port -eq 443 -or $port -eq 8443) { "https" } else { "http" }
-        $resp   = Invoke-WebRequest -Uri "$scheme://$ip:$port" -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
+        $url    = $scheme + "://" + $ip + ":" + $port
+        $resp   = Invoke-WebRequest -Uri $url -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
         if ($resp.Content -match "<title[^>]*>([^<]+)</title>") {
             return $matches[1].Trim().Substring(0, [Math]::Min($matches[1].Trim().Length, 60))
         }
@@ -258,14 +259,14 @@ foreach ($ip in ($activeIPs | Sort-Object { [Version]$_ })) {
     }
 
     $icon = switch ($deviceType) {
-        "dvr_nvr"    { "📹" }
-        "ip_camera"  { "📷" }
-        "switch"     { "🔀" }
-        "router_ap"  { "📡" }
-        "web_device" { "🌐" }
-        default      { "💻" }
+        "dvr_nvr"    { "[DVR/NVR]" }
+        "ip_camera"  { "[CAMARA]" }
+        "switch"     { "[SWITCH]" }
+        "router_ap"  { "[ROUTER]" }
+        "web_device" { "[WEB]" }
+        default      { "[?]" }
     }
-    Write-Host " $icon $vendor ($deviceType) ports:$($openPorts -join ',')" -ForegroundColor White
+    Write-Host "  $icon $vendor | ports: $($openPorts -join ',')" -ForegroundColor White
 }
 
 # ---- ONVIF WS-Discovery ----
