@@ -34,54 +34,61 @@ export async function GET() {
   });
 }
 
-const PS1_TEMPLATE = `#Requires -Version 5.1
+const PS1_TEMPLATE = `
 # ================================================================
-#  HelpDesk OS — Agente de inventario de hardware v1.0
-#  Ejecuta este script como Administrador para mejores resultados
+#  HelpDesk OS - Agente de inventario de hardware v1.1
+#  Ejecuta como Administrador para mejores resultados
 # ================================================================
 
 $API_URL   = "APP_URL_PLACEHOLDER"
 $API_TOKEN = "TOKEN_PLACEHOLDER"
-$AGENT_VER = "1.0.0"
+$AGENT_VER = "1.1.0"
 
 Write-Host ""
-Write-Host "  HelpDesk OS — Agente de inventario de hardware" -ForegroundColor Cyan
-Write-Host "  ================================================" -ForegroundColor DarkGray
+Write-Host "  HelpDesk OS - Agente de inventario" -ForegroundColor Cyan
+Write-Host "  ===================================" -ForegroundColor DarkGray
 Write-Host ""
 
-function Get-SizeGB($bytes) { if ($bytes) { [math]::Round($bytes / 1GB, 0) } else { 0 } }
-function Get-SizeMB($bytes) { if ($bytes) { [math]::Round($bytes / 1MB, 0) } else { 0 } }
-
+# ---- [1/8] Sistema operativo ----
 Write-Host "  [1/8] Sistema operativo..." -ForegroundColor Yellow
-$os       = Get-CimInstance Win32_OperatingSystem
-$osName   = "$($os.Caption) (Build $($os.BuildNumber))"
-$osArch   = $os.OSArchitecture
+$os = Get-CimInstance Win32_OperatingSystem
+$osCaption = $os.Caption
+$osBuild   = $os.BuildNumber
+$osVer     = $os.Version
+$osArch    = $os.OSArchitecture
+$osName    = "$osCaption build $osBuild"
 
+# ---- [2/8] Procesador ----
 Write-Host "  [2/8] Procesador..." -ForegroundColor Yellow
-$cpuRaw  = Get-CimInstance Win32_Processor | Select-Object -First 1
-$cpu     = "$($cpuRaw.Name.Trim()) — $($cpuRaw.NumberOfCores) nucleos @ $([math]::Round($cpuRaw.MaxClockSpeed/1000,1)) GHz"
-$cpuData = @{
-    name    = $cpuRaw.Name.Trim()
-    cores   = $cpuRaw.NumberOfCores
-    threads = $cpuRaw.NumberOfLogicalProcessors
-    mhz     = $cpuRaw.MaxClockSpeed
-    id      = $cpuRaw.ProcessorId
-}
+$cpuRaw   = Get-CimInstance Win32_Processor | Select-Object -First 1
+$cpuName  = $cpuRaw.Name.Trim()
+$cpuCores = $cpuRaw.NumberOfCores
+$cpuMHz   = $cpuRaw.MaxClockSpeed
+$cpuGHz   = [math]::Round($cpuMHz / 1000, 1)
+$cpu      = "$cpuName - $cpuCores nucleos a $cpuGHz GHz"
+$cpuData  = @{ name = $cpuName; cores = $cpuCores; threads = $cpuRaw.NumberOfLogicalProcessors; mhz = $cpuMHz; id = $cpuRaw.ProcessorId }
 
+# ---- [3/8] Memoria RAM ----
 Write-Host "  [3/8] Memoria RAM..." -ForegroundColor Yellow
-$ramModules = Get-CimInstance Win32_PhysicalMemory
-$ramGB      = Get-SizeGB(($ramModules | Measure-Object -Property Capacity -Sum).Sum)
-$ramData    = $ramModules | ForEach-Object {
-    @{ sizeGB = Get-SizeGB($_.Capacity); manufacturer = $_.Manufacturer; partNumber = $_.PartNumber.Trim(); serial = $_.SerialNumber.Trim(); speed = $_.Speed }
+$ramModules = @(Get-CimInstance Win32_PhysicalMemory)
+$ramTotalGB = [math]::Round(($ramModules | Measure-Object -Property Capacity -Sum).Sum / 1GB, 0)
+$ramData = $ramModules | ForEach-Object {
+    $sizeGB = [math]::Round($_.Capacity / 1GB, 0)
+    @{ sizeGB = $sizeGB; manufacturer = $_.Manufacturer; partNumber = $_.PartNumber.Trim(); serial = $_.SerialNumber.Trim(); speed = $_.Speed }
 }
 
+# ---- [4/8] Discos ----
 Write-Host "  [4/8] Discos..." -ForegroundColor Yellow
-$disksRaw = Get-CimInstance Win32_DiskDrive
-$diskInfo = ($disksRaw | Select-Object -First 1 | ForEach-Object { "$($_.Model.Trim()) $(Get-SizeGB($_.Size)) GB" })
+$disksRaw  = @(Get-CimInstance Win32_DiskDrive)
+$firstDisk = $disksRaw | Select-Object -First 1
+$diskSizeGB = [math]::Round($firstDisk.Size / 1GB, 0)
+$diskInfo  = "$($firstDisk.Model.Trim()) $diskSizeGB GB"
 $disksData = $disksRaw | ForEach-Object {
-    @{ model = $_.Model.Trim(); sizeGB = Get-SizeGB($_.Size); serial = $_.SerialNumber.Trim(); mediaType = $_.MediaType; interface = $_.InterfaceType }
+    $sizeGB = [math]::Round($_.Size / 1GB, 0)
+    @{ model = $_.Model.Trim(); sizeGB = $sizeGB; serial = $_.SerialNumber.Trim(); mediaType = $_.MediaType; interface = $_.InterfaceType }
 }
 
+# ---- [5/8] Placa madre ----
 Write-Host "  [5/8] Placa madre..." -ForegroundColor Yellow
 $mbRaw       = Get-CimInstance Win32_BaseBoard
 $motherboard = "$($mbRaw.Manufacturer.Trim()) $($mbRaw.Product.Trim())"
@@ -89,51 +96,64 @@ $biosRaw     = Get-CimInstance Win32_BIOS
 $mbData      = @{ manufacturer = $mbRaw.Manufacturer.Trim(); product = $mbRaw.Product.Trim(); serial = $mbRaw.SerialNumber.Trim() }
 $biosData    = @{ manufacturer = $biosRaw.Manufacturer; version = $biosRaw.SMBIOSBIOSVersion; serial = $biosRaw.SerialNumber }
 
+# ---- [6/8] Tarjeta grafica ----
 Write-Host "  [6/8] Tarjeta grafica..." -ForegroundColor Yellow
-$gpuData = Get-CimInstance Win32_VideoController | ForEach-Object {
-    @{ name = $_.Name; vramMB = Get-SizeMB($_.AdapterRAM); driver = $_.DriverVersion }
+$gpuData = @(Get-CimInstance Win32_VideoController) | ForEach-Object {
+    $vramMB = [math]::Round($_.AdapterRAM / 1MB, 0)
+    @{ name = $_.Name; vramMB = $vramMB; driver = $_.DriverVersion }
 }
 
+# ---- [7/8] Red ----
 Write-Host "  [7/8] Red..." -ForegroundColor Yellow
-$netRaw     = Get-CimInstance Win32_NetworkAdapterConfiguration | Where-Object { $_.IPEnabled -eq $true -and $_.DefaultIPGateway }
-$ipAddress  = ($netRaw | Select-Object -First 1).IPAddress | Select-Object -First 1
-$macAddress = ($netRaw | Select-Object -First 1).MACAddress
+$netRaw     = @(Get-CimInstance Win32_NetworkAdapterConfiguration | Where-Object { $_.IPEnabled -eq $true -and $_.DefaultIPGateway })
+$ipAddress  = if ($netRaw.Count -gt 0) { $netRaw[0].IPAddress | Select-Object -First 1 } else { "" }
+$macAddress = if ($netRaw.Count -gt 0) { $netRaw[0].MACAddress } else { "" }
 
+# ---- [8/8] USB ----
 Write-Host "  [8/8] Dispositivos USB..." -ForegroundColor Yellow
 $usbData = try {
-    Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue |
-        Where-Object { $_.Class -in @("USB","HIDClass","Keyboard","Mouse","Printer","Image","Disk Drive") } |
-        ForEach-Object { @{ name = $_.FriendlyName; class = $_.Class; status = $_.Status.ToString() } }
+    @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue |
+        Where-Object { $_.Class -in @("USB","HIDClass","Keyboard","Mouse","Printer","Image") } |
+        ForEach-Object { @{ name = $_.FriendlyName; class = $_.Class; status = $_.Status.ToString() } })
 } catch { @() }
 
+# ---- Tipo de equipo ----
 $chassis   = try { (Get-CimInstance Win32_SystemEnclosure).ChassisTypes | Select-Object -First 1 } catch { 3 }
 $assetType = if ($chassis -in @(8,9,10,11,12,14,18,21)) { "LAPTOP" } else { "DESKTOP" }
 
-$payload = @{
+# ---- Construir payload ----
+$hwData = @{
+    cpu         = $cpuData
+    ram         = $ramData
+    disks       = $disksData
+    motherboard = $mbData
+    bios        = $biosData
+    gpu         = $gpuData
+    network     = @{ ip = $ipAddress; mac = $macAddress }
+    usb         = $usbData
+    os          = @{ name = $osCaption; version = $osVer; build = $osBuild; arch = $osArch }
+}
+
+$body = @{
     hostname     = $env:COMPUTERNAME
     username     = $env:USERNAME
     ipAddress    = $ipAddress
     macAddress   = $macAddress
     osName       = $osName
     cpu          = $cpu
-    ramGB        = $ramGB
+    ramGB        = $ramTotalGB
     diskInfo     = $diskInfo
     motherboard  = $motherboard
     agentVersion = $AGENT_VER
     assetType    = $assetType
-    hardwareData = @{
-        cpu   = $cpuData; ram = $ramData; disks = $disksData
-        motherboard = $mbData; bios = $biosData; gpu = $gpuData
-        network = @{ ip = $ipAddress; mac = $macAddress }
-        usb = $usbData
-        os  = @{ name = $os.Caption; version = $os.Version; build = $os.BuildNumber; arch = $osArch }
-    }
-} | ConvertTo-Json -Depth 6
+    hardwareData = $hwData
+}
+
+$payload = $body | ConvertTo-Json -Depth 6
+$headers = @{ "Authorization" = "Bearer $API_TOKEN"; "Content-Type" = "application/json" }
 
 Write-Host ""
 Write-Host "  Enviando datos a HelpDesk OS..." -ForegroundColor Cyan
-
-$headers = @{ "Authorization" = "Bearer $API_TOKEN"; "Content-Type" = "application/json" }
 
 try {
     $resp = Invoke-RestMethod -Uri "$API_URL/api/agent/inventory" -Method POST -Body $payload -Headers $headers
@@ -143,8 +163,8 @@ try {
     Write-Host "  ->  ID     : $($resp.id)"               -ForegroundColor DarkGray
 } catch {
     Write-Host ""
-    Write-Host "  ERROR: $($_.Exception.Message)" -ForegroundColor Red
-    Write-Host "  Verifica tu conexion y que el servidor este disponible." -ForegroundColor Yellow
+    Write-Host "  ERROR: $($_.Exception.Message)"         -ForegroundColor Red
+    Write-Host "  Verifica tu conexion a internet."       -ForegroundColor Yellow
 }
 
 Write-Host ""
