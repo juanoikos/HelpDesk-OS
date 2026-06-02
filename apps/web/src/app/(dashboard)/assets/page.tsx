@@ -485,11 +485,23 @@ export default function AssetsPage() {
   const assetsQuery  = trpc.assets.list.useQuery();
   const assets       = assetsQuery.data ?? [];
 
-  const [showCreate,    setShowCreate]    = useState(false);
-  const [selectedId,    setSelectedId]    = useState<string | null>(null);
-  const [filterType,    setFilterType]    = useState<string>("ALL");
-  const [filterStatus,  setFilterStatus]  = useState<string>("ALL");
-  const [search,        setSearch]        = useState("");
+  const [showCreate,      setShowCreate]    = useState(false);
+  const [selectedId,      setSelectedId]    = useState<string | null>(null);
+  const [filterType,      setFilterType]    = useState<string>("ALL");
+  const [filterStatus,    setFilterStatus]  = useState<string>("ALL");
+  const [filterLocation,  setFilterLocation] = useState<string>("");
+  const [search,          setSearch]        = useState("");
+
+  // Construir URL de exportación con los filtros activos
+  const exportUrl = () => {
+    const p = new URLSearchParams();
+    if (filterType   !== "ALL") p.set("type",   filterType);
+    if (filterStatus !== "ALL") p.set("status", filterStatus);
+    if (filterLocation.trim())  p.set("location", filterLocation.trim());
+    if (search.trim())          p.set("search",   search.trim());
+    const qs = p.toString();
+    return `/api/assets/export${qs ? "?" + qs : ""}`;
+  };
 
   const detailQuery = useAssetDetail(selectedId);
 
@@ -501,16 +513,19 @@ export default function AssetsPage() {
 
   // Filtered
   const filtered = assets.filter((a) => {
-    if (filterType   !== "ALL" && a.type   !== filterType)   return false;
-    if (filterStatus !== "ALL" && a.status !== filterStatus) return false;
+    if (filterType     !== "ALL" && a.type   !== filterType)   return false;
+    if (filterStatus   !== "ALL" && a.status !== filterStatus) return false;
+    if (filterLocation && !(a.location ?? "").toLowerCase().includes(filterLocation.toLowerCase())) return false;
     if (search) {
       const q = search.toLowerCase();
       return (
-        (a.hostname ?? a.name).toLowerCase().includes(q) ||
-        (a.username ?? "").toLowerCase().includes(q) ||
-        (a.osName ?? "").toLowerCase().includes(q) ||
-        (a.cpu ?? "").toLowerCase().includes(q) ||
-        (a.ipAddress ?? "").toLowerCase().includes(q)
+        (a.hostname ?? a.name).toLowerCase().includes(q)  ||
+        (a.username     ?? "").toLowerCase().includes(q)  ||
+        (a.osName       ?? "").toLowerCase().includes(q)  ||
+        (a.cpu          ?? "").toLowerCase().includes(q)  ||
+        (a.ipAddress    ?? "").toLowerCase().includes(q)  ||
+        (a.assetNumber  ?? "").toLowerCase().includes(q)  ||
+        (a.location     ?? "").toLowerCase().includes(q)
       );
     }
     return true;
@@ -578,6 +593,19 @@ export default function AssetsPage() {
             <option key={v} value={v}>{c.label}</option>
           ))}
         </select>
+        <input
+          value={filterLocation}
+          onChange={(e) => setFilterLocation(e.target.value)}
+          placeholder="Filtrar por sede..."
+          className="bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 w-44"
+        />
+        <a
+          href={exportUrl()}
+          download
+          className="flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+        >
+          ⬇ Exportar Excel
+        </a>
       </div>
 
       {/* Table */}
