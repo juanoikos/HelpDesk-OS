@@ -230,6 +230,10 @@ model Asset {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
+  // Campos de gestión manual
+  assetNumber  String?  // número de activo / etiqueta (ej: DYC-001)
+  location     String?  // sede, tienda o área donde está el equipo
+
   // Agent-collected hardware fields
   hostname     String?
   username     String?

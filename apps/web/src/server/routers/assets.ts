@@ -29,6 +29,8 @@ export const assetsRouter = router({
         purchasedAt:  true,
         createdAt:    true,
         updatedAt:    true,
+        assetNumber:  true,
+        location:     true,
         hostname:     true,
         username:     true,
         ipAddress:    true,
@@ -92,6 +94,8 @@ export const assetsRouter = router({
       brand:        z.string().max(80).optional().nullable(),
       model:        z.string().max(80).optional().nullable(),
       status:       z.enum(["ACTIVE", "INACTIVE", "MAINTENANCE", "RETIRED"]).optional(),
+      assetNumber:  z.string().max(50).optional().nullable(),
+      location:     z.string().max(100).optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;

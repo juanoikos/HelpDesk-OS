@@ -1,7 +1,7 @@
 "use client";
 
 import { trpc } from "@/trpc/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -177,6 +177,32 @@ function HardwareDetail({ asset, onClose }: { asset: ReturnType<typeof useAssetD
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const hw = asset.hardwareData as Record<string, any> | null;
+  const utils = trpc.useUtils();
+  const [assetNumber, setAssetNumber] = useState(asset.assetNumber ?? "");
+  const [location,    setLocation]    = useState(asset.location ?? "");
+  const [saving,      setSaving]      = useState(false);
+  const [saved,       setSaved]       = useState(false);
+
+  useEffect(() => {
+    setAssetNumber(asset.assetNumber ?? "");
+    setLocation(asset.location ?? "");
+  }, [asset.id, asset.assetNumber, asset.location]);
+
+  const updateMut = trpc.assets.update.useMutation({
+    onSuccess: () => {
+      utils.assets.list.invalidate();
+      setSaved(true);
+      setSaving(false);
+      setTimeout(() => setSaved(false), 2000);
+    },
+    onError: () => setSaving(false),
+  });
+
+  const handleSave = () => {
+    setSaving(true);
+    setSaved(false);
+    updateMut.mutate({ id: asset.id, assetNumber: assetNumber || null, location: location || null });
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-start justify-end z-50">
@@ -194,6 +220,41 @@ function HardwareDetail({ asset, onClose }: { asset: ReturnType<typeof useAssetD
         </div>
 
         <div className="p-6 space-y-6">
+
+          {/* Campos editables: número de activo y sede */}
+          <section className="bg-slate-800 rounded-xl p-4 space-y-3">
+            <h3 className="text-slate-300 text-sm font-semibold">Gestión del activo</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-slate-500 text-xs block mb-1">Número de activo</label>
+                <input
+                  value={assetNumber}
+                  onChange={(e) => setAssetNumber(e.target.value)}
+                  placeholder="Ej: DYC-001, PC-032..."
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-slate-500 text-xs block mb-1">Sede / Tienda</label>
+                <input
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="Ej: Oficina Bogotá, Tienda Norte..."
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 text-white text-sm px-4 py-2 rounded-lg transition-colors"
+              >
+                {saving ? "Guardando..." : saved ? "✓ Guardado" : "Guardar"}
+              </button>
+            </div>
+          </section>
+
           {/* Basic info */}
           <section>
             <h3 className="text-slate-400 text-xs uppercase tracking-wider mb-3">Información general</h3>
@@ -534,7 +595,7 @@ export default function AssetsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-800">
-                  {["Equipo", "Usuario", "Tipo", "OS", "CPU", "RAM", "Disco", "Última conexión", "Estado"].map((h) => (
+                  {["Equipo", "N° Activo", "Sede / Tienda", "Usuario", "Tipo", "OS", "CPU", "RAM", "Disco", "Última conexión", "Estado"].map((h) => (
                     <th key={h} className="text-left text-slate-500 text-xs font-medium px-4 py-3 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -554,6 +615,12 @@ export default function AssetsPage() {
                           <span className="text-white font-medium">{asset.hostname ?? asset.name}</span>
                         </div>
                       </td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs font-mono ${asset.assetNumber ? "text-blue-400" : "text-slate-600"}`}>
+                          {asset.assetNumber ?? "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-400 text-xs">{asset.location ?? "—"}</td>
                       <td className="px-4 py-3 text-slate-400">{asset.username ?? "—"}</td>
                       <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{TYPE_LABEL[asset.type] ?? asset.type}</td>
                       <td className="px-4 py-3 text-slate-400 max-w-[160px] truncate">{asset.osName ?? "—"}</td>
