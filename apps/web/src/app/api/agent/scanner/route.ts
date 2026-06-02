@@ -41,22 +41,35 @@ export async function GET(req: NextRequest) {
   const token  = settings.agentToken!;
   const server = process.env.AUTH_URL ?? req.nextUrl.origin;
 
-  // ── Generar .bat que descarga y ejecuta el PS1 automáticamente ───────────────
-  // Esto evita el problema de política de ejecución al hacer doble clic
+  // ── .bat autónomo con PS1 embebido en base64 (sin internet, sin política) ────
+  const ps1Content = PS1_SCANNER
+    .replace(/APP_URL_PLACEHOLDER/g, server)
+    .replace(/TOKEN_PLACEHOLDER/g,   token);
+
+  const b64      = Buffer.from(ps1Content, "utf8").toString("base64");
+  const b64Lines = b64.match(/.{1,64}/g) ?? [];
+
+  const echoLines = b64Lines
+    .map((line, i) => i === 0
+      ? `echo ${line}> "%TMPB64%"`
+      : `echo ${line}>> "%TMPB64%"`)
+    .join("\r\n");
+
   const bat = `@echo off
 chcp 65001 >nul
 title HelpDesk OS - Scanner de Red
 echo.
-echo  HelpDesk OS - Scanner de Red v1.0
-echo  =====================================
+echo  =============================================
+echo   HelpDesk OS - Scanner de Red v1.0
+echo  =============================================
 echo.
-echo  Iniciando... por favor espera.
-echo.
-set "TMPPS1=%TEMP%\\helpdesk-scanner-%RANDOM%.ps1"
-powershell.exe -ExecutionPolicy Bypass -NoProfile -Command "$ProgressPreference='SilentlyContinue'; try { Invoke-WebRequest -Uri '${server}/api/agent/scanner' -Headers @{Authorization='Bearer ${token}'} -OutFile $env:TMPPS1 -UseBasicParsing } catch { Write-Host '  ERROR al descargar el script: ' $_.Exception.Message -ForegroundColor Red; pause; exit 1 }"
+set "TMPB64=%TEMP%\\hd_scanner_%RANDOM%.b64"
+set "TMPPS1=%TEMP%\\hd_scanner_%RANDOM%.ps1"
+${echoLines}
+certutil -decode "%TMPB64%" "%TMPPS1%" >nul 2>&1
+del "%TMPB64%" 2>nul
 if not exist "%TMPPS1%" (
   echo  ERROR: No se pudo preparar el scanner.
-  echo  Verifica tu conexion a internet.
   pause
   exit /b 1
 )

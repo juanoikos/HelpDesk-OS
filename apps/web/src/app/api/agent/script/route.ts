@@ -41,21 +41,39 @@ export async function GET(req: NextRequest) {
   const token  = settings.agentToken!;
   const appUrl = process.env.AUTH_URL ?? "http://localhost:3000";
 
-  // ── .bat que descarga y ejecuta el agente sin problemas de política ──────────
+  // ── Generar .bat autónomo con PS1 embebido en base64 ─────────────────────────
+  // El .bat usa certutil (incluido en Windows) para decodificar y ejecutar
+  // sin necesidad de internet ni configuración de políticas de ejecución
+  const ps1Content = PS1_TEMPLATE
+    .replace(/APP_URL_PLACEHOLDER/g, appUrl)
+    .replace(/TOKEN_PLACEHOLDER/g,   token);
+
+  // Codificar PS1 en base64 y partir en líneas de 64 chars (formato certutil)
+  const b64      = Buffer.from(ps1Content, "utf8").toString("base64");
+  const b64Lines = b64.match(/.{1,64}/g) ?? [];
+
+  // Primeras líneas con > (crear), resto con >> (añadir)
+  const echoLines = b64Lines
+    .map((line, i) => i === 0
+      ? `echo ${line}> "%TMPB64%"`
+      : `echo ${line}>> "%TMPB64%"`)
+    .join("\r\n");
+
   const bat = `@echo off
 chcp 65001 >nul
 title HelpDesk OS - Agente de inventario
 echo.
-echo  HelpDesk OS - Agente de inventario de hardware
-echo  =================================================
+echo  ================================================
+echo   HelpDesk OS - Agente de inventario de hardware
+echo  ================================================
 echo.
-echo  Iniciando... por favor espera.
-echo.
-set "TMPPS1=%TEMP%\\helpdesk-agent-%RANDOM%.ps1"
-powershell.exe -ExecutionPolicy Bypass -NoProfile -Command "$ProgressPreference='SilentlyContinue'; try { Invoke-WebRequest -Uri '${appUrl}/api/agent/script' -Headers @{Authorization='Bearer ${token}'} -OutFile $env:TMPPS1 -UseBasicParsing } catch { Write-Host '  ERROR al descargar el script: ' $_.Exception.Message -ForegroundColor Red; pause; exit 1 }"
+set "TMPB64=%TEMP%\\hd_agent_%RANDOM%.b64"
+set "TMPPS1=%TEMP%\\hd_agent_%RANDOM%.ps1"
+${echoLines}
+certutil -decode "%TMPB64%" "%TMPPS1%" >nul 2>&1
+del "%TMPB64%" 2>nul
 if not exist "%TMPPS1%" (
   echo  ERROR: No se pudo preparar el agente.
-  echo  Verifica tu conexion a internet.
   pause
   exit /b 1
 )
