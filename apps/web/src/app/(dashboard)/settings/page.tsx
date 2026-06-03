@@ -47,7 +47,7 @@ const AGENT_VIEW_FIELDS = [
   { key: "diagnosis",        label: "Diagnóstico",              desc: "Causa técnica" },
 ];
 
-type Tab = "perfil" | "categorias" | "equipo" | "vistas" | "canales" | "respuestas";
+type Tab = "perfil" | "usuarios" | "categorias" | "equipo" | "vistas" | "canales" | "respuestas";
 
 // ─── Mi perfil ────────────────────────────────────────────────────────────────
 
@@ -392,6 +392,220 @@ function GroupForm({ initial, onSave, onCancel, loading }: {
           {loading ? "..." : "Guardar"}
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─── Usuarios ────────────────────────────────────────────────────────────────
+
+const ROLE_BADGE: Record<string, { label: string; style: string }> = {
+  ADMIN: { label: "Admin",   style: "bg-purple-900/60 text-purple-300 border border-purple-800" },
+  AGENT: { label: "Agente",  style: "bg-blue-900/60 text-blue-300 border border-blue-800" },
+  USER:  { label: "Usuario", style: "bg-slate-700/60 text-slate-300 border border-slate-600" },
+};
+
+function UsersSection() {
+  const utils  = trpc.useUtils();
+  const { data: users, isLoading } = trpc.teams.members.listAll.useQuery();
+  const { data: me } = trpc.settings.getProfile.useQuery();
+
+  const updateRole = trpc.teams.members.updateRole.useMutation({
+    onSuccess: () => utils.teams.members.listAll.invalidate(),
+    onError:   (e) => alert(e.message),
+  });
+  const deleteUser = trpc.teams.members.deleteUser.useMutation({
+    onSuccess: () => utils.teams.members.listAll.invalidate(),
+    onError:   (e) => alert(e.message),
+  });
+
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [search,          setSearch]          = useState("");
+  const [roleFilter,      setRoleFilter]      = useState<string>("ALL");
+
+  const filtered = (users ?? []).filter((u) => {
+    if (roleFilter !== "ALL" && u.role !== roleFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const total  = users?.length ?? 0;
+  const admins = users?.filter((u) => u.role === "ADMIN").length ?? 0;
+  const agents = users?.filter((u) => u.role === "AGENT").length ?? 0;
+  const endusers = users?.filter((u) => u.role === "USER").length ?? 0;
+
+  return (
+    <div>
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h2 className="text-white font-semibold text-lg">Usuarios de la empresa</h2>
+          <p className="text-slate-500 text-sm mt-0.5">Todos los usuarios registrados en tu cuenta</p>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-4 gap-3 mb-6">
+        {[
+          { label: "Total",    value: total,     color: "text-white" },
+          { label: "Admins",   value: admins,    color: "text-purple-400" },
+          { label: "Agentes",  value: agents,    color: "text-blue-400" },
+          { label: "Usuarios", value: endusers,  color: "text-slate-400" },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+            <div className={`text-2xl font-bold ${color}`}>{value}</div>
+            <div className="text-slate-500 text-xs mt-1">{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filtros */}
+      <div className="flex gap-3 mb-4 flex-wrap">
+        <div className="relative flex-1 min-w-48">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">🔍</span>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nombre o correo…"
+            className="w-full bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+          />
+        </div>
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+          className="bg-slate-800 border border-slate-700 text-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+        >
+          <option value="ALL">Todos los roles</option>
+          <option value="ADMIN">Admin</option>
+          <option value="AGENT">Agente</option>
+          <option value="USER">Usuario</option>
+        </select>
+      </div>
+
+      {/* Tabla */}
+      {isLoading ? (
+        <p className="text-slate-500 text-sm">Cargando usuarios…</p>
+      ) : filtered.length === 0 ? (
+        <p className="text-slate-500 text-sm">Sin resultados.</p>
+      ) : (
+        <div className="rounded-xl border border-slate-800 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-800/50 border-b border-slate-800">
+                <th className="text-left text-slate-400 font-medium px-4 py-3">Usuario</th>
+                <th className="text-left text-slate-400 font-medium px-4 py-3">Rol</th>
+                <th className="text-left text-slate-400 font-medium px-4 py-3">Grupos</th>
+                <th className="text-left text-slate-400 font-medium px-4 py-3 text-center">Tickets creados</th>
+                <th className="text-left text-slate-400 font-medium px-4 py-3 text-center">Asignados</th>
+                <th className="text-left text-slate-400 font-medium px-4 py-3">Registrado</th>
+                <th className="text-left text-slate-400 font-medium px-4 py-3">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {filtered.map((u) => {
+                const badge = ROLE_BADGE[u.role] ?? ROLE_BADGE.USER;
+                const isSelf = u.id === me?.id;
+                return (
+                  <tr key={u.id} className="hover:bg-slate-800/30 transition-colors">
+                    {/* Avatar + nombre + email */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center text-white text-sm font-semibold shrink-0">
+                          {u.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-white font-medium text-sm leading-tight">
+                            {u.name}
+                            {isSelf && <span className="ml-1.5 text-xs text-slate-500">(tú)</span>}
+                          </p>
+                          <p className="text-slate-500 text-xs">{u.email}</p>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Rol editable */}
+                    <td className="px-4 py-3">
+                      {isSelf ? (
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badge.style}`}>
+                          {badge.label}
+                        </span>
+                      ) : (
+                        <select
+                          value={u.role}
+                          onChange={(e) => updateRole.mutate({ userId: u.id, role: e.target.value as "AGENT" | "ADMIN" })}
+                          disabled={updateRole.isPending}
+                          className="bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-blue-500 disabled:opacity-50"
+                        >
+                          <option value="ADMIN">Admin</option>
+                          <option value="AGENT">Agente</option>
+                          <option value="USER">Usuario</option>
+                        </select>
+                      )}
+                    </td>
+
+                    {/* Grupos */}
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {u.groups.length === 0 ? (
+                          <span className="text-slate-700 text-xs">—</span>
+                        ) : u.groups.map(({ group }) => (
+                          <span key={group.id} className="text-xs px-2 py-0.5 rounded-full font-medium"
+                            style={{ backgroundColor: `${group.color ?? "#3b82f6"}22`, color: group.color ?? "#3b82f6", border: `1px solid ${group.color ?? "#3b82f6"}44` }}>
+                            {group.name}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+
+                    {/* Tickets creados */}
+                    <td className="px-4 py-3 text-center">
+                      <span className={`text-sm font-medium ${u._count.ticketsCreated > 0 ? "text-white" : "text-slate-600"}`}>
+                        {u._count.ticketsCreated}
+                      </span>
+                    </td>
+
+                    {/* Tickets asignados */}
+                    <td className="px-4 py-3 text-center">
+                      <span className={`text-sm font-medium ${u._count.ticketsAssigned > 0 ? "text-blue-400" : "text-slate-600"}`}>
+                        {u._count.ticketsAssigned}
+                      </span>
+                    </td>
+
+                    {/* Fecha de registro */}
+                    <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
+                      {new Date(u.createdAt).toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" })}
+                    </td>
+
+                    {/* Eliminar */}
+                    <td className="px-4 py-3">
+                      {!isSelf && (
+                        confirmDeleteId === u.id ? (
+                          <span className="flex items-center gap-1.5">
+                            <span className="text-red-400 text-xs">¿Eliminar?</span>
+                            <button
+                              onClick={() => { deleteUser.mutate({ userId: u.id }); setConfirmDeleteId(null); }}
+                              disabled={deleteUser.isPending}
+                              className="text-xs bg-red-700 hover:bg-red-600 text-white px-2 py-0.5 rounded transition-colors"
+                            >Sí</button>
+                            <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-slate-500 hover:text-slate-300">No</button>
+                          </span>
+                        ) : (
+                          <button onClick={() => setConfirmDeleteId(u.id)}
+                            className="text-slate-600 hover:text-red-400 text-xs transition-colors"
+                            title="Eliminar usuario">
+                            🗑
+                          </button>
+                        )
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -895,12 +1109,13 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>("perfil");
 
   const TABS: { key: Tab; label: string; icon: string; adminOnly?: boolean }[] = [
-    { key: "perfil",     label: "Mi perfil",       icon: "👤" },
-    { key: "categorias", label: "Categorías",       icon: "🏷️",  adminOnly: true },
-    { key: "equipo",     label: "Equipo",           icon: "👥",  adminOnly: true },
-    { key: "vistas",     label: "Vistas de ticket", icon: "🎛️",  adminOnly: true },
-    { key: "canales",    label: "Canales",            icon: "📡",  adminOnly: true },
-    { key: "respuestas", label: "Respuestas rápidas", icon: "💬",  adminOnly: true },
+    { key: "perfil",     label: "Mi perfil",         icon: "👤" },
+    { key: "usuarios",   label: "Usuarios",           icon: "🧑‍🤝‍🧑", adminOnly: true },
+    { key: "categorias", label: "Categorías",         icon: "🏷️",  adminOnly: true },
+    { key: "equipo",     label: "Equipo",             icon: "👥",  adminOnly: true },
+    { key: "vistas",     label: "Vistas de ticket",   icon: "🎛️",  adminOnly: true },
+    { key: "canales",    label: "Canales",             icon: "📡",  adminOnly: true },
+    { key: "respuestas", label: "Respuestas rápidas",  icon: "💬",  adminOnly: true },
   ];
 
   const visibleTabs = TABS.filter((t) => !t.adminOnly || isAdmin);
@@ -923,6 +1138,7 @@ export default function SettingsPage() {
       </div>
 
       {tab === "perfil"     && <ProfileSection />}
+      {tab === "usuarios"   && <UsersSection />}
       {tab === "categorias" && <CategoriesSection />}
       {tab === "equipo"     && <TeamSection />}
       {tab === "vistas"     && <TicketViewsSection />}

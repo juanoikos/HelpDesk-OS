@@ -215,6 +215,33 @@ const membersRouter = router({
     });
   }),
 
+  // Todos los usuarios de la empresa (para la pestaña Usuarios en config)
+  listAll: protectedProcedure.query(async ({ ctx }) => {
+    requireAdmin(ctx.session.user.role);
+    const tenantId = ctx.session.user.tenantId;
+    return prisma.user.findMany({
+      where:   { tenantId },
+      select: {
+        id:             true,
+        name:           true,
+        email:          true,
+        role:           true,
+        emailSignature: true,
+        createdAt:      true,
+        groups: {
+          select: { group: { select: { id: true, name: true, color: true } } },
+        },
+        _count: {
+          select: {
+            ticketsCreated:  true,
+            ticketsAssigned: true,
+          },
+        },
+      },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+    });
+  }),
+
   updateRole: protectedProcedure
     .input(z.object({
       userId: z.string(),
