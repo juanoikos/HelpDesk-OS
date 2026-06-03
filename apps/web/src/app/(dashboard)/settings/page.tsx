@@ -414,6 +414,8 @@ function TeamSection() {
   const addMember    = trpc.teams.groups.addMember.useMutation({ onSuccess: () => utils.teams.members.list.invalidate() });
   const removeMember = trpc.teams.groups.removeMember.useMutation({ onSuccess: () => utils.teams.members.list.invalidate() });
   const updateRole   = trpc.teams.members.updateRole.useMutation({ onSuccess: () => utils.teams.members.list.invalidate(), onError: (e) => alert(e.message) });
+  const deleteUser   = trpc.teams.members.deleteUser.useMutation({ onSuccess: () => utils.teams.members.list.invalidate(), onError: (e) => alert(e.message) });
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const [showInvite, setShowInvite] = useState(false);
   const [inviteName, setInviteName] = useState("");
@@ -509,10 +511,28 @@ function TeamSection() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <button onClick={() => setExpandMemberId(expandMemberId === m.id ? null : m.id)}
-                          className="text-blue-400 hover:text-blue-300 text-xs transition-colors">
-                          Asignar grupo {expandMemberId === m.id ? "▲" : "▼"}
-                        </button>
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <button onClick={() => setExpandMemberId(expandMemberId === m.id ? null : m.id)}
+                            className="text-blue-400 hover:text-blue-300 text-xs transition-colors">
+                            Asignar grupo {expandMemberId === m.id ? "▲" : "▼"}
+                          </button>
+                          {confirmDeleteId === m.id ? (
+                            <span className="flex items-center gap-1.5">
+                              <span className="text-red-400 text-xs">¿Eliminar?</span>
+                              <button
+                                onClick={() => { deleteUser.mutate({ userId: m.id }); setConfirmDeleteId(null); }}
+                                disabled={deleteUser.isPending}
+                                className="text-xs bg-red-700 hover:bg-red-600 text-white px-2 py-0.5 rounded transition-colors"
+                              >Sí</button>
+                              <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-slate-500 hover:text-slate-300">No</button>
+                            </span>
+                          ) : (
+                            <button onClick={() => setConfirmDeleteId(m.id)}
+                              className="text-slate-600 hover:text-red-400 text-xs transition-colors">
+                              🗑
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                     {expandMemberId === m.id && (

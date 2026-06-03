@@ -230,6 +230,39 @@ const membersRouter = router({
         data:  { role: input.role },
       });
     }),
+
+  deleteUser: protectedProcedure
+    .input(z.object({ userId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      const tenantId = ctx.session.user.tenantId;
+
+      if (input.userId === ctx.session.user.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No puedes eliminarte a ti mismo" });
+      }
+
+      const user = await prisma.user.findFirst({
+        where:  { id: input.userId, tenantId },
+        select: { id: true, name: true },
+      });
+      if (!user) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Usuario no encontrado" });
+      }
+
+      // Desasignar tickets que tenga asignados (no los eliminamos, solo los dejamos sin agente)
+      await prisma.ticket.updateMany({
+        where: { tenantId, assignedToId: input.userId },
+        data:  { assignedToId: null },
+      });
+
+      // Eliminar membresías de grupo
+      await prisma.groupMember.deleteMany({ where: { userId: input.userId } });
+
+      // Eliminar el usuario
+      await prisma.user.delete({ where: { id: input.userId } });
+
+      return { ok: true };
+    }),
 });
 
 // ─── Main teams router ────────────────────────────────────────────────────────
