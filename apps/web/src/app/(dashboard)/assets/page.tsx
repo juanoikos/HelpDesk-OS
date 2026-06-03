@@ -182,6 +182,14 @@ function HardwareDetail({ asset, onClose }: { asset: ReturnType<typeof useAssetD
   const [location,    setLocation]    = useState(asset.location ?? "");
   const [saving,      setSaving]      = useState(false);
   const [saved,       setSaved]       = useState(false);
+  const [confirming,  setConfirming]  = useState(false);
+
+  const deleteMut = trpc.assets.delete.useMutation({
+    onSuccess: () => {
+      utils.assets.list.invalidate();
+      onClose();
+    },
+  });
 
   useEffect(() => {
     setAssetNumber(asset.assetNumber ?? "");
@@ -216,7 +224,35 @@ function HardwareDetail({ asset, onClose }: { asset: ReturnType<typeof useAssetD
               {asset.ipAddress && `  ·  🌐 ${asset.ipAddress}`}
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors text-xl leading-none">✕</button>
+          <div className="flex items-center gap-3">
+            {!confirming ? (
+              <button
+                onClick={() => setConfirming(true)}
+                className="text-slate-600 hover:text-red-400 transition-colors text-xs"
+                title="Eliminar activo"
+              >
+                🗑 Eliminar
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-red-400 text-xs">¿Eliminar este activo?</span>
+                <button
+                  onClick={() => deleteMut.mutate({ id: asset.id })}
+                  disabled={deleteMut.isPending}
+                  className="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {deleteMut.isPending ? "…" : "Sí, eliminar"}
+                </button>
+                <button
+                  onClick={() => setConfirming(false)}
+                  className="text-slate-500 hover:text-slate-300 text-xs px-2 py-1"
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
+            <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors text-xl leading-none">✕</button>
+          </div>
         </div>
 
         <div className="p-6 space-y-6">
