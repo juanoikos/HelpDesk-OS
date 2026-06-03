@@ -566,47 +566,100 @@ export default function AssetsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-4 flex-wrap">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por equipo, usuario, OS, IP…"
-          className="bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 flex-1 min-w-48"
-        />
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          className="bg-slate-800 border border-slate-700 text-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-        >
-          <option value="ALL">Todos los tipos</option>
-          {Object.entries(TYPE_LABEL).map(([v, l]) => (
-            <option key={v} value={v}>{l}</option>
-          ))}
-        </select>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="bg-slate-800 border border-slate-700 text-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-        >
-          <option value="ALL">Todos los estados</option>
-          {Object.entries(STATUS_CONFIG).map(([v, c]) => (
-            <option key={v} value={v}>{c.label}</option>
-          ))}
-        </select>
-        <input
-          value={filterLocation}
-          onChange={(e) => setFilterLocation(e.target.value)}
-          placeholder="Filtrar por sede..."
-          className="bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 w-44"
-        />
-        <a
-          href={exportUrl()}
-          download
-          className="flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
-        >
-          ⬇ Exportar Excel
-        </a>
-      </div>
+      {(() => {
+        const hasFilters = search || filterType !== "ALL" || filterStatus !== "ALL" || filterLocation;
+        const activeCount = [search, filterType !== "ALL", filterStatus !== "ALL", filterLocation].filter(Boolean).length;
+        return (
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 text-sm font-medium">🔍 Filtros</span>
+                {activeCount > 0 && (
+                  <span className="bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    {activeCount} activo{activeCount > 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                {hasFilters && (
+                  <button
+                    onClick={() => { setSearch(""); setFilterType("ALL"); setFilterStatus("ALL"); setFilterLocation(""); }}
+                    className="text-xs text-slate-500 hover:text-slate-300 transition-colors underline"
+                  >
+                    Limpiar filtros
+                  </button>
+                )}
+                <a
+                  href={exportUrl()}
+                  download
+                  className="flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                >
+                  ⬇ Exportar Excel
+                </a>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="lg:col-span-2">
+                <label className="block text-slate-500 text-xs mb-1">Buscar</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">🔍</span>
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Equipo, usuario, OS, IP, N° activo…"
+                    className="w-full bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-lg pl-9 pr-8 py-2 text-sm focus:outline-none focus:border-blue-500"
+                  />
+                  {search && (
+                    <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white text-xs">✕</button>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-slate-500 text-xs mb-1">Tipo</label>
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className={`w-full bg-slate-800 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 ${filterType !== "ALL" ? "border-blue-500 text-white" : "border-slate-700 text-slate-300"}`}
+                >
+                  <option value="ALL">Todos los tipos</option>
+                  {Object.entries(TYPE_LABEL).map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-slate-500 text-xs mb-1">Estado</label>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className={`w-full bg-slate-800 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 ${filterStatus !== "ALL" ? "border-blue-500 text-white" : "border-slate-700 text-slate-300"}`}
+                >
+                  <option value="ALL">Todos los estados</option>
+                  {Object.entries(STATUS_CONFIG).map(([v, c]) => (
+                    <option key={v} value={v}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-slate-500 text-xs mb-1">Sede / Ubicación</label>
+                <input
+                  value={filterLocation}
+                  onChange={(e) => setFilterLocation(e.target.value)}
+                  placeholder="Filtrar por sede…"
+                  className={`w-full bg-slate-800 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 placeholder-slate-500 ${filterLocation ? "border-blue-500 text-white" : "border-slate-700 text-white"}`}
+                />
+              </div>
+              <div className="lg:col-span-3 flex items-end">
+                <div className="text-slate-600 text-xs">
+                  {filtered.length === assets.length
+                    ? `${assets.length} activo${assets.length !== 1 ? "s" : ""} en total`
+                    : `${filtered.length} de ${assets.length} activo${assets.length !== 1 ? "s" : ""}`}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Table */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">

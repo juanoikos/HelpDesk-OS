@@ -58,6 +58,211 @@ const STATUS_TABS = [
 
 const OPEN_STATUSES = ["NEW","ASSIGNED","IN_DIAGNOSIS","IN_ANALYSIS","IN_PROGRESS","WAITING","PENDING_USER","PENDING_PROVIDER","ESCALATED"];
 
+// ─── Vista Kanban ─────────────────────────────────────────────────────────────
+
+const KANBAN_COLUMNS: { status: string; label: string; color: string; headerColor: string }[] = [
+  { status: "NEW",              label: "Nuevos",           color: "border-slate-600",  headerColor: "bg-slate-700" },
+  { status: "ASSIGNED",         label: "Asignados",        color: "border-blue-700",   headerColor: "bg-blue-900" },
+  { status: "IN_DIAGNOSIS",     label: "Diagnóstico",      color: "border-cyan-700",   headerColor: "bg-cyan-900" },
+  { status: "IN_ANALYSIS",      label: "Análisis",         color: "border-indigo-700", headerColor: "bg-indigo-900" },
+  { status: "IN_PROGRESS",      label: "En progreso",      color: "border-amber-700",  headerColor: "bg-amber-900" },
+  { status: "WAITING",          label: "En espera",        color: "border-purple-700", headerColor: "bg-purple-900" },
+  { status: "PENDING_USER",     label: "Pend. usuario",    color: "border-orange-700", headerColor: "bg-orange-900" },
+  { status: "PENDING_PROVIDER", label: "Pend. proveedor",  color: "border-rose-700",   headerColor: "bg-rose-900" },
+  { status: "ESCALATED",        label: "Escalados",        color: "border-red-700",    headerColor: "bg-red-900" },
+  { status: "RESOLVED",         label: "Resueltos",        color: "border-green-700",  headerColor: "bg-green-900" },
+];
+
+type TicketItem = {
+  id: string;
+  number: number;
+  title: string;
+  status: string;
+  priority: string;
+  createdAt: Date | string;
+  slaDeadline?: Date | string | null;
+  slaBreached?: boolean;
+  assignedTo?: { id: string; name: string } | null;
+  requesterName?: string | null;
+  createdBy: { id: string; name: string };
+  _count: { messages: number };
+};
+
+function KanbanCard({
+  ticket,
+  onDragStart,
+}: {
+  ticket: TicketItem;
+  onDragStart: (e: React.DragEvent, ticketId: string) => void;
+}) {
+  const now = new Date();
+  const deadline = ticket.slaDeadline ? new Date(ticket.slaDeadline as string) : null;
+  const hoursLeft = deadline ? Math.round((deadline.getTime() - now.getTime()) / 36e5) : null;
+
+  const slaBadge = ticket.slaBreached || (hoursLeft !== null && hoursLeft < 0)
+    ? <span className="text-red-400 text-xs font-medium">⚠ SLA vencido</span>
+    : hoursLeft !== null && hoursLeft < 4
+    ? <span className="text-amber-400 text-xs">⏱ {hoursLeft}h</span>
+    : null;
+
+  const priorityColors: Record<string, string> = {
+    LOW: "text-slate-500", MEDIUM: "text-blue-400", HIGH: "text-orange-400", URGENT: "text-red-400",
+  };
+  const priorityLabels: Record<string, string> = {
+    LOW: "Baja", MEDIUM: "Media", HIGH: "Alta", URGENT: "Urgente",
+  };
+
+  return (
+    <div
+      draggable
+      onDragStart={(e) => onDragStart(e, ticket.id)}
+      className="bg-slate-800 border border-slate-700 rounded-xl p-3 cursor-grab active:cursor-grabbing hover:border-slate-500 transition-colors select-none"
+    >
+      <div className="flex items-start justify-between gap-1 mb-2">
+        <Link
+          href={`/tickets/${ticket.id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="text-slate-200 text-sm font-medium hover:text-blue-400 transition-colors leading-tight line-clamp-2"
+        >
+          {ticket.title}
+        </Link>
+        <span className="text-slate-600 font-mono text-xs shrink-0 mt-0.5">
+          #{String(ticket.number).padStart(3, "0")}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap mt-2">
+        <span className={`text-xs font-semibold ${priorityColors[ticket.priority] ?? "text-slate-400"}`}>
+          {priorityLabels[ticket.priority] ?? ticket.priority}
+        </span>
+        {slaBadge}
+        {ticket._count.messages > 0 && (
+          <span className="text-slate-600 text-xs">💬 {ticket._count.messages}</span>
+        )}
+      </div>
+
+      {ticket.assignedTo && (
+        <div className="mt-2 flex items-center gap-1.5">
+          <div className="w-4 h-4 rounded-full bg-slate-600 flex items-center justify-center text-[9px] text-slate-300 shrink-0">
+            {ticket.assignedTo.name.charAt(0).toUpperCase()}
+          </div>
+          <span className="text-slate-500 text-xs truncate">{ticket.assignedTo.name}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KanbanBoard({ tickets }: { tickets: TicketItem[] }) {
+  const utils = trpc.useUtils();
+  const updateStatus = trpc.tickets.updateStatus.useMutation({
+    onMutate: async ({ id, status }) => {
+      // Optimistic update
+      await utils.tickets.list.cancel();
+      const prev = utils.tickets.list.getData(undefined);
+      utils.tickets.list.setData(undefined, (old) =>
+        old?.map((t) => t.id === id ? { ...t, status } : t)
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) utils.tickets.list.setData(undefined, ctx.prev);
+    },
+    onSettled: () => {
+      utils.tickets.list.invalidate();
+    },
+  });
+
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+  const dragTicketId = useRef<string | null>(null);
+
+  function handleDragStart(e: React.DragEvent, ticketId: string) {
+    dragTicketId.current = ticketId;
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function handleDragOver(e: React.DragEvent, status: string) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverCol(status);
+  }
+
+  function handleDrop(e: React.DragEvent, status: string) {
+    e.preventDefault();
+    setDragOverCol(null);
+    const id = dragTicketId.current;
+    if (!id) return;
+    const ticket = tickets.find((t) => t.id === id);
+    if (!ticket || ticket.status === status) return;
+    updateStatus.mutate({
+      id,
+      status: status as "NEW"|"ASSIGNED"|"IN_DIAGNOSIS"|"IN_ANALYSIS"|"IN_PROGRESS"|"WAITING"|"PENDING_USER"|"PENDING_PROVIDER"|"ESCALATED"|"RESOLVED"|"CLOSED",
+    });
+    dragTicketId.current = null;
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDragOverCol(null);
+    }
+  }
+
+  const byStatus = KANBAN_COLUMNS.reduce<Record<string, TicketItem[]>>((acc, col) => {
+    acc[col.status] = tickets.filter((t) => t.status === col.status);
+    return acc;
+  }, {});
+
+  return (
+    <div className="overflow-x-auto pb-4">
+      <div className="flex gap-3 min-w-max">
+        {KANBAN_COLUMNS.map((col) => {
+          const colTickets = byStatus[col.status] ?? [];
+          const isOver = dragOverCol === col.status;
+          return (
+            <div
+              key={col.status}
+              className={`w-64 flex flex-col rounded-xl border-2 transition-colors ${col.color} ${isOver ? "bg-slate-800/60" : "bg-slate-900/40"}`}
+              onDragOver={(e) => handleDragOver(e, col.status)}
+              onDrop={(e) => handleDrop(e, col.status)}
+              onDragLeave={handleDragLeave}
+            >
+              {/* Column header */}
+              <div className={`flex items-center justify-between px-3 py-2 rounded-t-lg ${col.headerColor}`}>
+                <span className="text-white text-xs font-semibold uppercase tracking-wide">{col.label}</span>
+                <span className="bg-black/20 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                  {colTickets.length}
+                </span>
+              </div>
+
+              {/* Cards */}
+              <div
+                className={`flex-1 p-2 space-y-2 min-h-[120px] rounded-b-lg transition-colors ${isOver ? "bg-slate-700/30" : ""}`}
+              >
+                {colTickets.length === 0 ? (
+                  <div className="flex items-center justify-center h-16 text-slate-700 text-xs">
+                    {isOver ? "Suelta aquí" : "Sin tickets"}
+                  </div>
+                ) : (
+                  colTickets.map((ticket) => (
+                    <KanbanCard
+                      key={ticket.id}
+                      ticket={ticket}
+                      onDragStart={handleDragStart}
+                    />
+                  ))
+                )}
+                {isOver && colTickets.length > 0 && (
+                  <div className="h-1 rounded-full bg-blue-500 opacity-60" />
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function TicketsPage() {
   const searchParams = useSearchParams();
   const [statusFilter,   setStatusFilter]   = useState<string | undefined>(undefined);
@@ -66,6 +271,7 @@ export default function TicketsPage() {
   const [groupId,        setGroupId]        = useState("");
   const [dateRange,      setDateRange]      = useState("");
   const [showFilters,    setShowFilters]    = useState(false);
+  const [view,           setView]           = useState<"list" | "kanban">("list");
 
   const { data: agents } = trpc.tickets.listAgents.useQuery();
   const { data: groups } = trpc.teams.groups.list.useQuery();
@@ -115,19 +321,44 @@ export default function TicketsPage() {
   return (
     <div>
       {/* Encabezado */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-white">Tickets de soporte</h1>
           <p className="text-slate-400 text-sm mt-0.5">
             {all?.length ?? 0} tickets en total
           </p>
         </div>
-        <Link
-          href="/tickets/new"
-          className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-4 py-2.5 rounded-xl text-sm transition-colors"
-        >
-          + Nuevo ticket
-        </Link>
+        <div className="flex items-center gap-3">
+          {/* Toggle vista */}
+          <div className="flex bg-slate-800 border border-slate-700 rounded-lg p-0.5">
+            <button
+              onClick={() => setView("list")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                view === "list"
+                  ? "bg-slate-600 text-white"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              ☰ Lista
+            </button>
+            <button
+              onClick={() => setView("kanban")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                view === "kanban"
+                  ? "bg-slate-600 text-white"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              ⬛ Kanban
+            </button>
+          </div>
+          <Link
+            href="/tickets/new"
+            className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-4 py-2.5 rounded-xl text-sm transition-colors"
+          >
+            + Nuevo ticket
+          </Link>
+        </div>
       </div>
 
       {/* Barra de búsqueda + filtros avanzados */}
@@ -196,8 +427,8 @@ export default function TicketsPage() {
         )}
       </div>
 
-      {/* Tabs de filtro */}
-      <div className="flex gap-1 mb-6 bg-slate-900 border border-slate-800 rounded-xl p-1 w-fit flex-wrap">
+      {/* Tabs de filtro — solo en vista Lista */}
+      {view === "list" && <div className="flex gap-1 mb-6 bg-slate-900 border border-slate-800 rounded-xl p-1 w-fit flex-wrap">
         {STATUS_TABS.map((tab) => {
           const count = !tab.value
             ? (all?.length ?? 0)
@@ -225,12 +456,23 @@ export default function TicketsPage() {
             </button>
           );
         })}
-      </div>
+      </div>}
 
-      {/* Contenido */}
-      {isLoading ? (
+      {/* Kanban: ocultar tabs de estado y mostrar board */}
+      {view === "kanban" && (
+        <>
+          {isLoading ? (
+            <div className="text-slate-500 text-sm py-8 text-center">Cargando tickets…</div>
+          ) : (
+            <KanbanBoard tickets={(rawTickets ?? []) as TicketItem[]} />
+          )}
+        </>
+      )}
+
+      {/* Contenido lista */}
+      {view === "list" && isLoading ? (
         <div className="text-slate-500 text-sm py-8 text-center">Cargando tickets...</div>
-      ) : !tickets?.length ? (
+      ) : view === "list" && !tickets?.length ? (
         <div className="text-center py-20">
           <div className="text-5xl mb-4">🎫</div>
           <p className="text-white font-semibold text-lg">No hay tickets</p>
@@ -246,7 +488,7 @@ export default function TicketsPage() {
             </Link>
           )}
         </div>
-      ) : (
+      ) : view === "list" && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
           <table className="w-full">
             <thead>
@@ -263,7 +505,7 @@ export default function TicketsPage() {
               </tr>
             </thead>
             <tbody>
-              {tickets.map((ticket) => (
+              {(tickets ?? []).map((ticket) => (
                 <tr
                   key={ticket.id}
                   className={`border-b border-slate-800 last:border-0 transition-colors ${

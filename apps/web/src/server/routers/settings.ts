@@ -189,6 +189,48 @@ export const settingsRouter = router({
       });
     }),
 
+  // ── Configuración IMAP de canal Email ─────────────────────────────────────
+  getChannelConfig: protectedProcedure
+    .input(z.object({ type: z.literal("EMAIL") }))
+    .query(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      const ch = await prisma.channel.findUnique({
+        where: { tenantId_type: { tenantId: ctx.session.user.tenantId, type: input.type } },
+      });
+      return (ch?.config ?? {}) as {
+        imapHost?:     string;
+        imapPort?:     number;
+        imapUser?:     string;
+        imapPassword?: string;
+        imapTls?:      boolean;
+      };
+    }),
+
+  updateChannelConfig: protectedProcedure
+    .input(z.object({
+      type: z.literal("EMAIL"),
+      config: z.object({
+        imapHost:     z.string().optional(),
+        imapPort:     z.number().int().min(1).max(65535).optional(),
+        imapUser:     z.string().optional(),
+        imapPassword: z.string().optional(),
+        imapTls:      z.boolean().optional(),
+      }),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      const tenantId = ctx.session.user.tenantId;
+      const existing = await prisma.channel.findUnique({
+        where: { tenantId_type: { tenantId, type: input.type } },
+      });
+      const merged = { ...(existing?.config as Record<string, unknown> ?? {}), ...input.config };
+      return prisma.channel.upsert({
+        where:  { tenantId_type: { tenantId, type: input.type } },
+        create: { tenantId, type: input.type, config: merged, isActive: false },
+        update: { config: merged },
+      });
+    }),
+
   // ── Configuración de vistas de ticket ──────────────────────────────────────
   getFormConfig: protectedProcedure.query(async ({ ctx }) => {
     const s = await prisma.tenantSettings.findUnique({

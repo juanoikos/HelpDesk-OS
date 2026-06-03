@@ -3,6 +3,8 @@ import path from "path";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // imapflow y mailparser son módulos Node.js puros — excluirlos del bundle cliente
+  serverExternalPackages: ["imapflow", "mailparser"],
   // Necesario en monorepo: le dice a Next.js que el root de tracing es helpdesk-os/
   // para que el standalone incluya packages/* y el server quede en standalone/apps/web/server.js
   outputFileTracingRoot: path.join(__dirname, "../../"),

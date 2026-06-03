@@ -713,6 +713,118 @@ function TicketViewsSection() {
   );
 }
 
+// ─── IMAP Config (sub-formulario del canal EMAIL) ─────────────────────────────
+
+function ImapConfigForm() {
+  const utils   = trpc.useUtils();
+  const { data: cfg, isLoading } = trpc.settings.getChannelConfig.useQuery({ type: "EMAIL" });
+  const saveMut = trpc.settings.updateChannelConfig.useMutation({
+    onSuccess: () => { utils.settings.getChannelConfig.invalidate({ type: "EMAIL" }); setMsg({ ok: true, text: "Configuración IMAP guardada." }); },
+    onError:   (e) => setMsg({ ok: false, text: e.message }),
+  });
+
+  const [host,     setHost]     = useState("");
+  const [port,     setPort]     = useState("993");
+  const [user,     setUser]     = useState("");
+  const [pass,     setPass]     = useState("");
+  const [tls,      setTls]      = useState(true);
+  const [showPass, setShowPass] = useState(false);
+  const [msg,      setMsg]      = useState<{ ok: boolean; text: string } | null>(null);
+  const [loaded,   setLoaded]   = useState(false);
+
+  React.useEffect(() => {
+    if (cfg && !loaded) {
+      setHost(cfg.imapHost ?? "");
+      setPort(String(cfg.imapPort ?? 993));
+      setUser(cfg.imapUser ?? "");
+      setPass(cfg.imapPassword ?? "");
+      setTls(cfg.imapTls !== false);
+      setLoaded(true);
+    }
+  }, [cfg, loaded]);
+
+  function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    saveMut.mutate({
+      type:   "EMAIL",
+      config: {
+        imapHost:     host || undefined,
+        imapPort:     parseInt(port) || undefined,
+        imapUser:     user || undefined,
+        imapPassword: pass || undefined,
+        imapTls:      tls,
+      },
+    });
+  }
+
+  if (isLoading) return <p className="text-slate-500 text-xs mt-3">Cargando configuración…</p>;
+
+  return (
+    <form onSubmit={handleSave} className="mt-4 bg-slate-800 rounded-xl p-4 border border-slate-700 space-y-3">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-slate-300 text-sm font-semibold">📨 Email entrante (IMAP)</span>
+        <span className="text-xs bg-blue-900 text-blue-300 px-2 py-0.5 rounded-full">Beta</span>
+      </div>
+      <p className="text-slate-500 text-xs">
+        Los emails recibidos en esta cuenta crean tickets automáticamente. Las respuestas que incluyan
+        <code className="bg-slate-700 px-1 rounded">[#001]</code> en el asunto se añaden al ticket existente.
+      </p>
+
+      {msg && (
+        <div className={`text-xs px-3 py-2 rounded-lg border ${msg.ok ? "bg-green-900/30 border-green-700 text-green-300" : "bg-red-900/30 border-red-700 text-red-300"}`}>
+          {msg.text}
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="col-span-2">
+          <label className="block text-slate-500 text-xs mb-1">Servidor IMAP</label>
+          <input value={host} onChange={(e) => setHost(e.target.value)}
+            placeholder="imap.gmail.com" className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+        </div>
+        <div>
+          <label className="block text-slate-500 text-xs mb-1">Puerto</label>
+          <input value={port} onChange={(e) => setPort(e.target.value)}
+            type="number" placeholder="993" className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-slate-500 text-xs mb-1">Usuario / Correo</label>
+        <input value={user} onChange={(e) => setUser(e.target.value)}
+          type="email" placeholder="soporte@tuempresa.com" className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+      </div>
+
+      <div>
+        <label className="block text-slate-500 text-xs mb-1">Contraseña / App password</label>
+        <div className="relative">
+          <input value={pass} onChange={(e) => setPass(e.target.value)}
+            type={showPass ? "text" : "password"} placeholder="••••••••••••"
+            className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 pr-16 text-sm focus:outline-none focus:border-blue-500" />
+          <button type="button" onClick={() => setShowPass((v) => !v)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs">
+            {showPass ? "Ocultar" : "Ver"}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input id="imap-tls" type="checkbox" checked={tls} onChange={(e) => setTls(e.target.checked)}
+          className="w-4 h-4 accent-blue-500" />
+        <label htmlFor="imap-tls" className="text-slate-400 text-xs cursor-pointer">Usar TLS/SSL (recomendado, puerto 993)</label>
+      </div>
+
+      <div className="flex justify-end pt-1">
+        <button type="submit" disabled={saveMut.isPending}
+          className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition-colors">
+          {saveMut.isPending ? "Guardando…" : "Guardar configuración IMAP"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // ─── Canales ──────────────────────────────────────────────────────────────────
 
 function ChannelsSection() {
@@ -728,17 +840,25 @@ function ChannelsSection() {
         {(Object.entries(CHANNEL_INFO) as [string, { label: string; icon: string; description: string }][]).map(([type, info]) => {
           const active = activeTypes.has(type as Parameters<typeof activeTypes.has>[0]);
           return (
-            <div key={type} className={`flex items-center gap-4 rounded-xl px-5 py-4 border transition-colors ${active ? "bg-slate-900 border-slate-700" : "bg-slate-900/50 border-slate-800"}`}>
-              <span className="text-2xl">{info.icon}</span>
-              <div className="flex-1">
-                <p className="text-slate-200 font-medium text-sm">{info.label}</p>
-                <p className="text-slate-500 text-xs mt-0.5">{info.description}</p>
+            <div key={type} className={`rounded-xl border transition-colors ${active ? "bg-slate-900 border-slate-700" : "bg-slate-900/50 border-slate-800"}`}>
+              <div className="flex items-center gap-4 px-5 py-4">
+                <span className="text-2xl">{info.icon}</span>
+                <div className="flex-1">
+                  <p className="text-slate-200 font-medium text-sm">{info.label}</p>
+                  <p className="text-slate-500 text-xs mt-0.5">{info.description}</p>
+                </div>
+                <button onClick={() => toggle.mutate({ type: type as "EMAIL" | "WHATSAPP_BAILEYS" | "WHATSAPP_META" | "PHONE" | "TEAMS", active: !active })}
+                  disabled={toggle.isPending}
+                  className={`text-sm font-medium px-4 py-1.5 rounded-lg transition-colors ${active ? "bg-green-900 text-green-400 hover:bg-red-900 hover:text-red-400" : "bg-slate-700 text-slate-400 hover:bg-green-900 hover:text-green-400"}`}>
+                  {active ? "Activo" : "Inactivo"}
+                </button>
               </div>
-              <button onClick={() => toggle.mutate({ type: type as "EMAIL" | "WHATSAPP_BAILEYS" | "WHATSAPP_META" | "PHONE" | "TEAMS", active: !active })}
-                disabled={toggle.isPending}
-                className={`text-sm font-medium px-4 py-1.5 rounded-lg transition-colors ${active ? "bg-green-900 text-green-400 hover:bg-red-900 hover:text-red-400" : "bg-slate-700 text-slate-400 hover:bg-green-900 hover:text-green-400"}`}>
-                {active ? "Activo" : "Inactivo"}
-              </button>
+              {/* Config IMAP solo para EMAIL cuando está activo */}
+              {type === "EMAIL" && active && (
+                <div className="px-5 pb-5">
+                  <ImapConfigForm />
+                </div>
+              )}
             </div>
           );
         })}
