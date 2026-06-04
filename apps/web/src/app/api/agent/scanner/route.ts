@@ -173,20 +173,30 @@ $pingTasks | Where-Object {
 } | ForEach-Object { $_.ping.Dispose() }
 Write-Host "        Hosts via ping: $($pingIPs.Count)" -ForegroundColor DarkGray
 
-# ---- Método 3: Puerto 445 (SMB — Windows siempre abierto) ----
-Write-Host "        Escaneando puerto 445/SMB (detecta Windows sin ping)..." -ForegroundColor DarkGray
-$smbTasks = 1..254 | ForEach-Object {
-    $ip  = "$subnet.$_"
-    $tcp = [System.Net.Sockets.TcpClient]::new()
-    [PSCustomObject]@{ ip = $ip; task = $tcp.ConnectAsync($ip, 445); tcp = $tcp }
+# ---- Método 3: Puertos Windows (445/SMB + 135/RPC — siempre abiertos) ----
+Write-Host "        Escaneando puertos Windows 445/135 (detecta equipos sin ping)..." -ForegroundColor DarkGray
+$winTasks = 1..254 | ForEach-Object {
+    $ip   = "$subnet.$_"
+    $tcp1 = [System.Net.Sockets.TcpClient]::new()
+    $tcp2 = [System.Net.Sockets.TcpClient]::new()
+    [PSCustomObject]@{
+        ip    = $ip
+        task1 = $tcp1.ConnectAsync($ip, 445)
+        task2 = $tcp2.ConnectAsync($ip, 135)
+        tcp1  = $tcp1
+        tcp2  = $tcp2
+    }
 }
-Start-Sleep -Milliseconds 600
-$smbIPs = $smbTasks | Where-Object { $_.task.IsCompleted -and $_.tcp.Connected } | ForEach-Object { $_.ip }
-$smbTasks | ForEach-Object { try { $_.tcp.Close() } catch {} }
-Write-Host "        Hosts via SMB: $($smbIPs.Count)" -ForegroundColor DarkGray
+Start-Sleep -Milliseconds 1200
+$winIPs = $winTasks | Where-Object {
+    ($_.task1.IsCompleted -and $_.tcp1.Connected) -or
+    ($_.task2.IsCompleted -and $_.tcp2.Connected)
+} | ForEach-Object { $_.ip }
+$winTasks | ForEach-Object { try { $_.tcp1.Close(); $_.tcp2.Close() } catch {} }
+Write-Host "        Hosts via puertos Windows: $($winIPs.Count)" -ForegroundColor DarkGray
 
 # ---- Unión de los tres métodos ----
-$activeIPs = ($arpIPs + $pingIPs + $smbIPs) | Sort-Object -Unique
+$activeIPs = ($arpIPs + $pingIPs + $winIPs) | Sort-Object -Unique
 Write-Host "  Hosts activos encontrados: $($activeIPs.Count)" -ForegroundColor Green
 
 # ---- Leer tabla ARP ----
