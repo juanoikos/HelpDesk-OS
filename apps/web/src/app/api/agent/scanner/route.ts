@@ -145,28 +145,48 @@ Write-Host ""
 Write-Host "  [1/4] Escaneando red ($subnet.1 - $subnet.254)..." -ForegroundColor Yellow
 Write-Host "        Esto puede tomar 30-60 segundos..." -ForegroundColor DarkGray
 
-# ---- Ping sweep paralelo (async .NET — sin procesos extra) ----
+# ---- Método 1: Tabla ARP (detecta equipos aunque bloqueen ICMP) ----
+Write-Host "        Leyendo tabla ARP..." -ForegroundColor DarkGray
+$arpRaw   = arp -a 2>$null
+$arpIPs   = @()
+foreach ($line in $arpRaw) {
+    if ($line -match "($([regex]::Escape($subnet))\.\d{1,3})\s") {
+        $ip = $matches[1]
+        if ($ip -notmatch "255$" -and $ip -notmatch "\.0$") { $arpIPs += $ip }
+    }
+}
+Write-Host "        Hosts en ARP: $($arpIPs.Count)" -ForegroundColor DarkGray
+
+# ---- Método 2: Ping sweep async .NET ----
+Write-Host "        Ping sweep async..." -ForegroundColor DarkGray
 $pingTasks = 1..254 | ForEach-Object {
     $ip   = "$subnet.$_"
     $ping = [System.Net.NetworkInformation.Ping]::new()
-    [PSCustomObject]@{ ip = $ip; task = $ping.SendPingAsync($ip, 400); ping = $ping }
+    [PSCustomObject]@{ ip = $ip; task = $ping.SendPingAsync($ip, 500); ping = $ping }
 }
-
-# Esperar todas las tareas a la vez
 [System.Threading.Tasks.Task]::WaitAll($pingTasks.task)
-
-$activeIPs = $pingTasks | Where-Object {
+$pingIPs = $pingTasks | Where-Object {
     $_.task.Result.Status -eq [System.Net.NetworkInformation.IPStatus]::Success
-} | ForEach-Object {
-    $_.ping.Dispose()
-    $_.ip
-}
+} | ForEach-Object { $_.ping.Dispose(); $_.ip }
+$pingTasks | Where-Object {
+    $_.task.Result.Status -ne [System.Net.NetworkInformation.IPStatus]::Success
+} | ForEach-Object { $_.ping.Dispose() }
+Write-Host "        Hosts via ping: $($pingIPs.Count)" -ForegroundColor DarkGray
 
-# Limpiar pings fallidos
-$pingTasks | Where-Object { $_.task.Result.Status -ne [System.Net.NetworkInformation.IPStatus]::Success } | ForEach-Object {
-    $_.ping.Dispose()
+# ---- Método 3: Puerto 445 (SMB — Windows siempre abierto) ----
+Write-Host "        Escaneando puerto 445/SMB (detecta Windows sin ping)..." -ForegroundColor DarkGray
+$smbTasks = 1..254 | ForEach-Object {
+    $ip  = "$subnet.$_"
+    $tcp = [System.Net.Sockets.TcpClient]::new()
+    [PSCustomObject]@{ ip = $ip; task = $tcp.ConnectAsync($ip, 445); tcp = $tcp }
 }
+Start-Sleep -Milliseconds 600
+$smbIPs = $smbTasks | Where-Object { $_.task.IsCompleted -and $_.tcp.Connected } | ForEach-Object { $_.ip }
+$smbTasks | ForEach-Object { try { $_.tcp.Close() } catch {} }
+Write-Host "        Hosts via SMB: $($smbIPs.Count)" -ForegroundColor DarkGray
 
+# ---- Unión de los tres métodos ----
+$activeIPs = ($arpIPs + $pingIPs + $smbIPs) | Sort-Object -Unique
 Write-Host "  Hosts activos encontrados: $($activeIPs.Count)" -ForegroundColor Green
 
 # ---- Leer tabla ARP ----
