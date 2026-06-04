@@ -769,7 +769,7 @@ export default function AssetsPage() {
 
       {selectedId && (
         <HardwareDetail
-          asset={detailQuery.data ?? null}
+          asset={detailQuery.data ?? undefined}
           onClose={() => setSelectedId(null)}
         />
       )}
