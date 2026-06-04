@@ -1121,16 +1121,16 @@ export default function SettingsPage() {
   const visibleTabs = TABS.filter((t) => !t.adminOnly || isAdmin);
 
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-5xl">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-white mb-1">Configuración</h1>
         <p className="text-slate-400 text-sm">Gestiona tu perfil y la configuración de tu organización.</p>
       </div>
 
-      <div className="flex gap-1 mb-8 bg-slate-900 p-1 rounded-xl border border-slate-800 overflow-x-auto">
+      <div className="flex flex-wrap gap-1 mb-8 bg-slate-900 p-1 rounded-xl border border-slate-800">
         {visibleTabs.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${tab === t.key ? "bg-slate-700 text-white" : "text-slate-500 hover:text-slate-300"}`}>
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${tab === t.key ? "bg-slate-700 text-white" : "text-slate-500 hover:text-slate-300"}`}>
             <span>{t.icon}</span>
             <span>{t.label}</span>
           </button>
