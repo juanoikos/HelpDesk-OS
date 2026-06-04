@@ -1,62 +1,66 @@
-# HelpDesk OS — Agente Dahua P2P
+# HelpDesk OS — Agente Dahua
 
-Agente C# que conecta DVRs Dahua via serial (P2P cloud) y busca grabaciones.
+Agente Windows que conecta DVRs Dahua localmente y busca grabaciones.
+Usa el paquete NuGet **`Dahua.Api`** — las DLLs se descargan automáticamente, sin instalar nada.
 
 ## Requisitos
 - Windows 10/11 x64
-- .NET 8 SDK (https://dotnet.microsoft.com/download)
-- SmartPSS instalado (proporciona las DLLs de Dahua)
+- .NET 8 Runtime: https://dotnet.microsoft.com/download/dotnet/8.0
 
-## Configuración
+## Instalación y configuración
 
-1. Compilar:
-   ```
-   dotnet build -c Release
-   ```
-   O abrir `DahuaAgent.csproj` en Visual Studio y compilar.
+### 1. Compilar
+```bash
+cd apps/dahua-agent
+dotnet restore          # descarga Dahua.Api + DLLs nativas automáticamente
+dotnet build -c Release
+```
 
-2. Ejecutar por primera vez — genera `config.json`:
-   ```
-   DahuaAgent.exe
-   ```
+O generar `.exe` standalone:
+```bash
+dotnet publish -c Release -r win-x64 --self-contained true
+# Ejecutable: bin/Release/net8.0/win-x64/publish/DahuaAgent.exe
+```
 
-3. Editar `config.json`:
-   ```json
-   {
-     "HelpdeskUrl": "https://helpdesk-os-production.up.railway.app",
-     "AgentToken": "TU_TOKEN_AQUI",
-     "SdkDllPath": "C:\\Program Files\\SmartPSS",
-     "PollIntervalSec": 10
-   }
-   ```
-   - `AgentToken`: el token del agente en HelpDesk OS (Activos → Token del agente)
-   - `SdkDllPath`: ruta donde están las DLLs de Dahua (carpeta de SmartPSS)
+### 2. Primera ejecución — genera config.json
+```bash
+DahuaAgent.exe
+```
 
-4. Ejecutar de nuevo — el agente copia las DLLs y empieza a hacer polling.
+### 3. Editar config.json
+```json
+{
+  "ServerUrl": "https://helpdesk-os-production.up.railway.app",
+  "AgentToken": "TU_TOKEN_AQUI",
+  "PollIntervalSeconds": 10
+}
+```
+- **AgentToken**: HelpDesk OS → Activos → Token del agente
+
+### 4. Ejecutar
+```bash
+DahuaAgent.exe
+```
 
 ## Cómo funciona
 
-1. El agente hace polling a HelpDesk OS cada 10 segundos
-2. Cuando hay un trabajo de búsqueda pendiente (con serial), lo procesa
-3. Conecta al DVR via P2P usando el serial + usuario + contraseña
-4. Busca las grabaciones del rango de fecha/hora y canales especificados
-5. Envía los resultados a HelpDesk OS
-6. La página de grabaciones muestra los resultados automáticamente
+1. Polling cada 10s a HelpDesk OS buscando trabajos pendientes
+2. Cuando hay un trabajo:
+   - Conecta al DVR via `Dahua.Api.Login(ip, 37777, user, pass)`
+   - Busca grabaciones por canal y rango de fechas
+   - Envía resultados a HelpDesk OS
+3. La página de grabaciones muestra los resultados automáticamente
 
 ## Flujo desde HelpDesk OS
 
 ```
-Usuario hace clic en "🌐 Buscar remoto (P2P)"
-    ↓
-HelpDesk OS crea un DvrScanJob en la BD
-    ↓
-Este agente detecta el job en polling
-    ↓
-Conecta al DVR via serial (Dahua P2P cloud)
-    ↓
-Busca grabaciones con CLIENT_QueryRecordFile
-    ↓
-Postea resultados a /api/agent/dvr-scan
-    ↓
+Clic en "🏠 Buscar local" → crea DvrScanJob
+       ↓
+DahuaAgent.exe detecta el job (polling)
+       ↓
+Dahua.Api.Login → FindFiles → resultados
+       ↓
+POST /api/agent/dvr-scan → HelpDesk OS
+       ↓
 La página actualiza automáticamente
 ```

@@ -22,11 +22,11 @@ export async function GET(req: NextRequest) {
 
   const tenantId = settings.tenantId;
 
-  // Buscar jobs pendientes con serial configurado
+  // Jobs pendientes (con DVR que tenga localIp configurada para acceso local)
   const jobs = await prisma.dvrScanJob.findMany({
     where: {
       tenantId,
-      status: { in: ["pending", "error"] },
+      status:    { in: ["pending", "error"] },
       expiresAt: { gt: new Date() },
     },
     orderBy: { createdAt: "asc" },
@@ -35,34 +35,40 @@ export async function GET(req: NextRequest) {
 
   if (jobs.length === 0) return NextResponse.json([]);
 
-  // Enriquecer con datos del DVR y credenciales
   const result = await Promise.all(jobs.map(async (job) => {
-    const dvr  = await prisma.dvr.findFirst({ where: { id: job.dvrId, tenantId } });
-    if (!dvr?.serial) return null; // Solo trabajos con serial (P2P)
+    const dvr = await prisma.dvr.findFirst({ where: { id: job.dvrId, tenantId } });
+    if (!dvr) return null;
 
-    // Resolver credenciales
-    let username = "admin";
-    let password = "";
+    // El agente C# usa la IP local + puerto 37777
+    const dvrIp   = dvr.localIp ?? dvr.ip;
+    const dvrPort = (dvr as { localPort?: number }).localPort ?? 37777;
+
+    // Credenciales
+    let dvrUser = "admin";
+    let dvrPass = "";
     if (dvr.username && dvr.password) {
-      username = dvr.username;
-      password = decrypt(dvr.password);
+      dvrUser = dvr.username;
+      dvrPass = decrypt(dvr.password);
     } else {
       const cred = await prisma.dvrCredential.findUnique({ where: { tenantId } });
-      if (cred) { username = cred.username; password = decrypt(cred.password); }
+      if (cred) { dvrUser = cred.username; dvrPass = decrypt(cred.password); }
     }
 
+    const channels  = job.channels as number[];
+    const startDate = `${job.date} ${job.startTime}:00`;
+    const endDate   = `${job.date} ${job.endTime}:59`;
+
     return {
-      id:        job.id,
+      jobId:     job.id,
       dvrName:   dvr.name,
-      serial:    dvr.serial,
-      localIp:   dvr.localIp   ?? "",
-      localPort: (dvr as { localPort?: number }).localPort ?? 80,
-      username,
-      password,
-      channels:  job.channels as number[],
-      date:      job.date,
-      startTime: job.startTime,
-      endTime:   job.endTime,
+      dvrIp,
+      dvrPort,
+      dvrUser,
+      dvrPass,
+      channels,
+      startDate,
+      endDate,
+      action:    "search",
     };
   }));
 
