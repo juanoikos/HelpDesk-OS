@@ -213,15 +213,15 @@ function KanbanBoard({ tickets }: { tickets: TicketItem[] }) {
   }, {});
 
   return (
-    <div className="overflow-x-auto pb-4">
-      <div className="flex gap-3 min-w-max">
+    <div>
+      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}>
         {KANBAN_COLUMNS.map((col) => {
           const colTickets = byStatus[col.status] ?? [];
           const isOver = dragOverCol === col.status;
           return (
             <div
               key={col.status}
-              className={`w-64 flex flex-col rounded-xl border-2 transition-colors ${col.color} ${isOver ? "bg-slate-800/60" : "bg-slate-900/40"}`}
+              className={`flex flex-col rounded-xl border-2 transition-colors ${col.color} ${isOver ? "bg-slate-800/60" : "bg-slate-900/40"}`}
               onDragOver={(e) => handleDragOver(e, col.status)}
               onDrop={(e) => handleDrop(e, col.status)}
               onDragLeave={handleDragLeave}
