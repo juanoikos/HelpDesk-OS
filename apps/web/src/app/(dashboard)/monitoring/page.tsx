@@ -369,6 +369,13 @@ export default function MonitoringPage() {
   const createMut = trpc.monitoring.createTarget.useMutation({
     onSuccess: () => { utils.monitoring.listTargets.invalidate(); setShowForm(false); },
   });
+  const importMut = trpc.monitoring.importFromNetwork.useMutation({
+    onSuccess: (data) => {
+      utils.monitoring.listTargets.invalidate();
+      utils.monitoring.listAgents.invalidate();
+      alert(`✅ Importados: ${data.created} nuevos targets\n⏭ Ya existían: ${data.skipped}`);
+    },
+  });
   const toggleMut = trpc.monitoring.toggleTarget.useMutation({
     onSuccess: () => utils.monitoring.listTargets.invalidate(),
   });
@@ -451,6 +458,18 @@ export default function MonitoringPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              if (confirm("¿Importar todos los dispositivos descubiertos por el scanner de red como targets LAN?")) {
+                importMut.mutate();
+              }
+            }}
+            disabled={importMut.isPending}
+            className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 border border-slate-700 text-slate-300 text-sm px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+            title="Importa los dispositivos de la página Red como targets LAN automáticamente"
+          >
+            {importMut.isPending ? "Importando…" : "🔍 Importar desde Red"}
+          </button>
           <a
             href="/api/agent/monitor-agent"
             download="helpdesk-monitor.ps1"

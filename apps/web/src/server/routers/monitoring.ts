@@ -174,6 +174,77 @@ export const monitoringRouter = router({
       return { h1, h24, d7 };
     }),
 
+  // ── Importar dispositivos desde el scanner de red ─────────────────────────
+  importFromNetwork: protectedProcedure.mutation(async ({ ctx }) => {
+    requireAdmin(ctx.session.user.role);
+    const tenantId = ctx.session.user.tenantId;
+
+    const devices = await prisma.networkDevice.findMany({
+      where: { tenantId },
+    });
+
+    if (devices.length === 0) return { created: 0, skipped: 0 };
+
+    // IPs ya monitoreadas → no duplicar
+    const existing = await prisma.monitorTarget.findMany({
+      where:  { tenantId },
+      select: { host: true },
+    });
+    const existingHosts = new Set(existing.map((t) => t.host));
+
+    let created = 0;
+    let skipped = 0;
+
+    for (const d of devices) {
+      if (existingHosts.has(d.ip)) { skipped++; continue; }
+
+      const ports = (d.openPorts as number[] | null) ?? [];
+
+      // Seleccionar el mejor método de check según puertos detectados
+      let checkType: "http" | "https" | "tcp" | "ping" = "ping";
+      let port: number | undefined;
+
+      if (ports.includes(443) || ports.includes(8443)) {
+        checkType = "https";
+        port = ports.includes(443) ? 443 : 8443;
+      } else if (ports.includes(80) || ports.includes(8080) || ports.includes(8000)) {
+        checkType = "http";
+        port = ports.includes(80) ? undefined : ports.includes(8080) ? 8080 : 8000;
+      } else if (ports.length > 0) {
+        checkType = "tcp";
+        // Prioridad: 22 SSH, 554 RTSP, 37777 Dahua, 34567 DVR, primer puerto disponible
+        const priority = [22, 554, 37777, 34567, 23];
+        const preferred = priority.find((p) => ports.includes(p));
+        port = preferred ?? ports[0];
+      }
+
+      // Nombre descriptivo
+      const name = d.hostname ?? d.vendor ?? `Dispositivo ${d.ip}`;
+
+      await prisma.monitorTarget.create({
+        data: {
+          tenantId,
+          name:        name.slice(0, 100),
+          host:        d.ip,
+          checkType,
+          port:        port ?? null,
+          httpPath:    "/",
+          interval:    60,
+          timeout:     5000,
+          retries:     2,
+          enabled:     true,
+          networkType: "lan",
+          agentHost:   d.scannedFrom, // el agente que escaneó esa red lo monitoreará
+        },
+      });
+
+      existingHosts.add(d.ip);
+      created++;
+    }
+
+    return { created, skipped };
+  }),
+
   // ── Disparar check WAN inmediato (desde UI) ───────────────────────────────
   triggerCheck: protectedProcedure
     .input(z.object({ targetId: z.string() }))
