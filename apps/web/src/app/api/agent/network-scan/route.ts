@@ -102,8 +102,40 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── Auto-registrar DVRs/NVRs detectados ───────────────────────────────────
+  const dvrDevices = devices.filter(d => d.ip && d.deviceType === "dvr_nvr");
+  let dvrCount = 0;
+  for (const d of dvrDevices) {
+    try {
+      const existing = await prisma.dvr.findFirst({ where: { tenantId, ip: d.ip } });
+      if (!existing) {
+        await prisma.dvr.create({
+          data: {
+            tenantId,
+            ip:       d.ip,
+            port:     80,
+            channels: 8,
+            name:     d.hostname ?? d.vendor ?? `DVR ${d.ip}`,
+            location: subnet ?? null,
+            status:   "ONLINE",
+            lastChecked: now,
+          },
+        });
+        dvrCount++;
+      } else {
+        // Actualizar status a ONLINE si ya existía
+        await prisma.dvr.update({
+          where: { id: existing.id },
+          data:  { status: "ONLINE", lastChecked: now },
+        });
+      }
+    } catch (err) {
+      console.error(`Error auto-registrando DVR ${d.ip}:`, err);
+    }
+  }
+
   return NextResponse.json(
-    { scanId, deviceCount: upsertCount },
+    { scanId, deviceCount: upsertCount, dvrsRegistered: dvrCount },
     { status: 200 }
   );
 }
