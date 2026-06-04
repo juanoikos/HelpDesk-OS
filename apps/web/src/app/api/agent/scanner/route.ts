@@ -199,20 +199,38 @@ Write-Host "        Hosts via puertos Windows: $($winIPs.Count)" -ForegroundColo
 $activeIPs = ($arpIPs + $pingIPs + $winIPs) | Sort-Object -Unique
 Write-Host "  Hosts activos encontrados: $($activeIPs.Count)" -ForegroundColor Green
 
-# ---- Leer tabla ARP ----
+# ---- Leer tabla ARP con Get-NetNeighbor (más confiable que arp -a) ----
 Write-Host ""
 Write-Host "  [2/4] Obteniendo MACs y fabricantes..." -ForegroundColor Yellow
 
-$arpOutput = arp -a 2>$null
-$macTable  = @{}
+$macTable = @{}
 
-foreach ($line in $arpOutput) {
-    if ($line -match "(\d+\.\d+\.\d+\.\d+)\s+([\da-fA-F-]{17})") {
-        $ip  = $matches[1]
-        $mac = $matches[2].Replace("-", ":").ToUpper()
-        if ($mac -ne "FF:FF:FF:FF:FF:FF") { $macTable[$ip] = $mac }
+# Método primario: Get-NetNeighbor (PowerShell nativo, datos estructurados)
+try {
+    Get-NetNeighbor -AddressFamily IPv4 -ErrorAction Stop |
+        Where-Object {
+            $_.State -notin @('Unreachable','Incomplete') -and
+            $_.LinkLayerAddress -notmatch "^00-00-00" -and
+            $_.LinkLayerAddress -ne "FF-FF-FF-FF-FF-FF"
+        } | ForEach-Object {
+            $ip  = $_.IPAddress
+            $mac = $_.LinkLayerAddress.Replace("-",":").ToUpper()
+            $macTable[$ip] = $mac
+        }
+} catch {}
+
+# Fallback: arp -a si Get-NetNeighbor no funciona
+if ($macTable.Count -eq 0) {
+    foreach ($line in (arp -a 2>$null)) {
+        if ($line -match "(\d+\.\d+\.\d+\.\d+)\s+([\da-fA-F-]{17})") {
+            $ip  = $matches[1]
+            $mac = $matches[2].Replace("-",":").ToUpper()
+            if ($mac -ne "FF:FF:FF:FF:FF:FF") { $macTable[$ip] = $mac }
+        }
     }
 }
+
+Write-Host "        MACs encontradas en tabla ARP: $($macTable.Count)" -ForegroundColor DarkGray
 
 # Función para buscar fabricante por MAC
 function Get-Vendor($mac) {
