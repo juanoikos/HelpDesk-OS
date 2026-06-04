@@ -54,14 +54,17 @@ public static class DvrService
 
                     foreach (var f in files)
                     {
+                        // f.Duration es int (segundos) en Dahua.Api v1.0.1
+                        var dur = TimeSpan.FromSeconds(Convert.ToDouble(f.Duration));
+
                         recordings.Add(new RecordingItem
                         {
                             Channel  = ch,
                             Start    = f.Date.ToString("yyyy-MM-dd HH:mm:ss"),
-                            End      = f.Date.Add(f.Duration).ToString("yyyy-MM-dd HH:mm:ss"),
-                            Size     = 0, // Dahua.Api no expone tamaño directamente
+                            End      = f.Date.Add(dur).ToString("yyyy-MM-dd HH:mm:ss"),
+                            Size     = 0,
                             FilePath = f.Name,
-                            Duration = f.Duration.ToString(@"hh\:mm\:ss"),
+                            Duration = dur.ToString(@"hh\:mm\:ss"),
                         });
                     }
                 }
