@@ -443,9 +443,11 @@ model Dvr {
   id          String    @id @default(cuid())
   tenantId    String
   name        String                        // nombre descriptivo ej: "Sede Norte - Bodega"
-  ip          String                        // IP pública o accesible desde internet
-  localIp     String?                       // IP local (192.168.x.x) para acceso dentro de la red
-  port        Int       @default(80)
+  serial      String?                       // número de serie Dahua (para acceso remoto P2P)
+  ip          String                        // IP pública (si tiene) o IP local como fallback
+  localIp     String?                       // IP local 192.168.x.x (acceso dentro de la red)
+  localPort   Int       @default(37777)     // puerto local Dahua (37777 por defecto)
+  port        Int       @default(80)        // puerto HTTP para API (80 por defecto)
   channels    Int       @default(8)         // 8 / 16 / 32
   username    String?                       // credencial propia (si es null usa la global)
   password    String?                       // cifrada con AES (si es null usa la global)

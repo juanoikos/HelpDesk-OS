@@ -68,15 +68,17 @@ export const dvrsRouter = router({
 
   create: protectedProcedure
     .input(z.object({
-      name:     z.string().min(1).max(100),
-      ip:       z.string().min(1),
-      localIp:  z.string().optional(),
-      port:     z.number().int().default(80),
-      channels: z.number().int().refine(v => [4, 8, 16, 32].includes(v)).default(8),
-      username: z.string().optional(),
-      password: z.string().optional(),
-      location: z.string().max(100).optional(),
-      notes:    z.string().max(300).optional(),
+      name:      z.string().min(1).max(100),
+      serial:    z.string().optional(),
+      ip:        z.string().min(1),
+      localIp:   z.string().optional(),
+      localPort: z.number().int().default(37777),
+      port:      z.number().int().default(80),
+      channels:  z.number().int().refine(v => [4, 8, 16, 32].includes(v)).default(8),
+      username:  z.string().optional(),
+      password:  z.string().optional(),
+      location:  z.string().max(100).optional(),
+      notes:     z.string().max(300).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       requireAdmin(ctx.session.user.role);
@@ -92,16 +94,18 @@ export const dvrsRouter = router({
 
   update: protectedProcedure
     .input(z.object({
-      id:       z.string(),
-      name:     z.string().min(1).max(100).optional(),
-      ip:       z.string().min(1).optional(),
-      localIp:  z.string().optional().nullable(),
-      port:     z.number().int().optional(),
-      channels: z.number().int().optional(),
-      username: z.string().optional().nullable(),
-      password: z.string().optional().nullable(),
-      location: z.string().max(100).optional().nullable(),
-      notes:    z.string().max(300).optional().nullable(),
+      id:        z.string(),
+      name:      z.string().min(1).max(100).optional(),
+      serial:    z.string().optional().nullable(),
+      ip:        z.string().min(1).optional(),
+      localIp:   z.string().optional().nullable(),
+      localPort: z.number().int().optional(),
+      port:      z.number().int().optional(),
+      channels:  z.number().int().optional(),
+      username:  z.string().optional().nullable(),
+      password:  z.string().optional().nullable(),
+      location:  z.string().max(100).optional().nullable(),
+      notes:     z.string().max(300).optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       requireAdmin(ctx.session.user.role);

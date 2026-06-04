@@ -38,8 +38,10 @@ export default function DvrsPage() {
 
   // Form nuevo DVR
   const [newName,      setNewName]      = useState("");
+  const [newSerial,    setNewSerial]    = useState("");
   const [newIp,        setNewIp]        = useState("");
   const [newLocalIp,   setNewLocalIp]   = useState("");
+  const [newLocalPort, setNewLocalPort] = useState("37777");
   const [newPort,      setNewPort]      = useState("80");
   const [newChannels,  setNewChannels]  = useState("8");
   const [newLocation,  setNewLocation]  = useState("");
@@ -53,7 +55,7 @@ export default function DvrsPage() {
 
   const saveCred  = trpc.dvrs.saveCredential.useMutation({ onSuccess: () => { utils.dvrs.getCredential.invalidate(); setCredOk(true); } });
   const createDvr = trpc.dvrs.create.useMutation({
-    onSuccess: () => { utils.dvrs.list.invalidate(); setShowAdd(false); setNewName(""); setNewIp(""); setNewLocalIp(""); setNewPort("80"); setNewChannels("8"); setNewLocation(""); setUseOwnCred(false); setNewUsername("admin"); setNewPassword(""); },
+    onSuccess: () => { utils.dvrs.list.invalidate(); setShowAdd(false); setNewName(""); setNewSerial(""); setNewIp(""); setNewLocalIp(""); setNewLocalPort("37777"); setNewPort("80"); setNewChannels("8"); setNewLocation(""); setUseOwnCred(false); setNewUsername("admin"); setNewPassword(""); },
     onError:   (e) => alert(e.message),
   });
   const deleteDvr = trpc.dvrs.delete.useMutation({ onSuccess: () => utils.dvrs.list.invalidate(), onError: (e) => alert(e.message) });
@@ -301,17 +303,33 @@ export default function DvrsPage() {
             <div className="space-y-3">
               <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nombre (ej: Sede Norte — Bodega)"
                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-              <div className="grid grid-cols-2 gap-3">
+              {/* Acceso remoto */}
+              <div className="border border-slate-700 rounded-xl p-3 space-y-2">
+                <p className="text-xs font-medium text-blue-400">🌐 Acceso remoto (fuera de la red)</p>
                 <div>
-                  <label className="text-slate-500 text-xs mb-1 block">🌐 IP Pública (acceso externo)</label>
-                  <input value={newIp} onChange={e => setNewIp(e.target.value)} placeholder="200.100.50.10"
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <label className="text-slate-500 text-xs mb-1 block">Número de serie (Serial)</label>
+                  <input value={newSerial} onChange={e => setNewSerial(e.target.value)} placeholder="ej: 3F06C3BPAG12345"
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 font-mono" />
                 </div>
-                <div>
-                  <label className="text-slate-500 text-xs mb-1 block">🏠 IP Local (dentro de la red)</label>
-                  <input value={newLocalIp} onChange={e => setNewLocalIp(e.target.value)} placeholder="192.168.1.15"
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                <p className="text-slate-600 text-xs">Se usa el serial + usuario/contraseña para conectar via P2P Dahua desde internet.</p>
+              </div>
+
+              {/* Acceso local */}
+              <div className="border border-slate-700 rounded-xl p-3 space-y-2">
+                <p className="text-xs font-medium text-green-400">🏠 Acceso local (dentro de la red)</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2">
+                    <label className="text-slate-500 text-xs mb-1 block">IP local</label>
+                    <input value={newLocalIp} onChange={e => setNewLocalIp(e.target.value)} placeholder="192.168.1.15"
+                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  </div>
+                  <div>
+                    <label className="text-slate-500 text-xs mb-1 block">Puerto</label>
+                    <input value={newLocalPort} onChange={e => setNewLocalPort(e.target.value)} type="number"
+                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  </div>
                 </div>
+                <p className="text-slate-600 text-xs">Puerto 37777 por defecto (protocolo Dahua TCP). Solo disponible desde la misma red.</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -360,16 +378,18 @@ export default function DvrsPage() {
               <button onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-white text-sm px-4 py-2">Cancelar</button>
               <button
                 onClick={() => createDvr.mutate({
-                  name:     newName,
-                  ip:       newIp || newLocalIp,
-                  localIp:  newLocalIp || undefined,
-                  port:     parseInt(newPort) || 80,
-                  channels: parseInt(newChannels) || 8,
-                  location: newLocation || undefined,
-                  username: useOwnCred && newUsername ? newUsername : undefined,
-                  password: useOwnCred && newPassword ? newPassword : undefined,
+                  name:      newName,
+                  serial:    newSerial || undefined,
+                  ip:        newLocalIp || newSerial || "—",
+                  localIp:   newLocalIp || undefined,
+                  localPort: parseInt(newLocalPort) || 37777,
+                  port:      parseInt(newPort) || 80,
+                  channels:  parseInt(newChannels) || 8,
+                  location:  newLocation || undefined,
+                  username:  useOwnCred && newUsername ? newUsername : undefined,
+                  password:  useOwnCred && newPassword ? newPassword : undefined,
                 })}
-                disabled={createDvr.isPending || !newName.trim() || (!newIp.trim() && !newLocalIp.trim()) || (useOwnCred && !newPassword.trim())}
+                disabled={createDvr.isPending || !newName.trim() || (!newLocalIp.trim() && !newSerial.trim()) || (useOwnCred && !newPassword.trim())}
                 className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg">
                 {createDvr.isPending ? "Guardando…" : "Agregar"}
               </button>
@@ -444,9 +464,16 @@ export default function DvrsPage() {
                     <p className="text-white font-medium">{dvr.name}</p>
                     {dvr.location && <p className="text-slate-500 text-xs">{dvr.location}</p>}
                   </td>
-                  <td className="px-4 py-3 text-xs">
-                    {dvr.ip && <div className="font-mono text-slate-300">🌐 {dvr.ip}:{dvr.port}</div>}
-                    {dvr.localIp && <div className="font-mono text-slate-500 mt-0.5">🏠 {dvr.localIp}:{dvr.port}</div>}
+                  <td className="px-4 py-3 text-xs space-y-1">
+                    {dvr.serial && (
+                      <div className="font-mono text-blue-400">🌐 S/N: {dvr.serial}</div>
+                    )}
+                    {dvr.localIp && (
+                      <div className="font-mono text-green-400">🏠 {dvr.localIp}:{(dvr as {localPort?: number}).localPort ?? 37777}</div>
+                    )}
+                    {!dvr.serial && !dvr.localIp && (
+                      <div className="font-mono text-slate-500">{dvr.ip}:{dvr.port}</div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-slate-400 text-xs">{dvr.channels} ch</td>
                   <td className="px-4 py-3"><StatusBadge status={dvr.status} /></td>
