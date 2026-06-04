@@ -108,9 +108,25 @@ Write-Host "  Detectando subred local..." -ForegroundColor Yellow
 $localIP = $null
 $subnet  = $null
 
-$adapters = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-    Where-Object { $_.IPAddress -notmatch "^127\." -and $_.PrefixOrigin -ne "WellKnown" } |
-    Select-Object -First 1
+# Preferir el adaptador con ruta por defecto (LAN real, no Hyper-V/VPN/WSL)
+$defaultRoute = Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue |
+    Sort-Object RouteMetric | Select-Object -First 1
+
+$adapters = $null
+if ($defaultRoute) {
+    $adapters = Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $defaultRoute.InterfaceIndex -ErrorAction SilentlyContinue |
+        Where-Object { $_.IPAddress -notmatch "^127\." } | Select-Object -First 1
+}
+
+# Fallback: cualquier adaptador no-loopback y no-virtual
+if (-not $adapters) {
+    $adapters = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.IPAddress -notmatch "^127\." -and
+            $_.PrefixOrigin -ne "WellKnown" -and
+            $_.IPAddress -notmatch "^172\.(1[6-9]|2[0-9]|3[0-1])\."
+        } | Select-Object -First 1
+}
 
 if ($adapters) {
     $localIP = $adapters.IPAddress
