@@ -6,16 +6,20 @@ import { prisma } from "@helpdesk-os/db";
 // haciendo checks de todos los targets LAN asignados al agente.
 
 export async function GET(req: NextRequest) {
-  const auth = req.headers.get("authorization");
   let token = "";
 
-  // Si viene autenticado, usar su token; sino, generar bat genérico que pide token
-  if (auth?.startsWith("Bearer ")) {
-    token = auth.slice(7);
-    const settings = await prisma.tenantSettings.findFirst({ where: { agentToken: token } });
-    if (!settings) {
-      return NextResponse.json({ error: "Token inválido" }, { status: 401 });
+  // Acepta el token por Bearer header O por query param ?token=xxx
+  const auth = req.headers.get("authorization");
+  const queryToken = req.nextUrl.searchParams.get("token");
+
+  const rawToken = (auth?.startsWith("Bearer ") ? auth.slice(7) : null) ?? queryToken ?? "";
+
+  if (rawToken) {
+    const settings = await prisma.tenantSettings.findFirst({ where: { agentToken: rawToken } });
+    if (settings) {
+      token = rawToken; // token válido → se embebe en el script
     }
+    // token inválido → el script pedirá el token al usuario (no bloqueamos la descarga)
   }
 
   const serverUrl = req.nextUrl.origin;
