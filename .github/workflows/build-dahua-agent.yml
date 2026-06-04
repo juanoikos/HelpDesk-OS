@@ -1,0 +1,87 @@
+name: Build & Publish Dahua Agent
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'apps/dahua-agent/**'
+      - '.github/workflows/build-dahua-agent.yml'
+  workflow_dispatch:  # permite ejecutarlo manualmente desde GitHub
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        working-directory: apps/dahua-agent
+        run: dotnet restore
+
+      - name: Publish (win-x64, self-contained)
+        working-directory: apps/dahua-agent
+        run: |
+          dotnet publish -c Release -r win-x64 --self-contained true `
+            /p:PublishSingleFile=true `
+            /p:EnableCompressionInSingleFile=true `
+            -o ./publish
+
+      - name: Crear ZIP con agente + instrucciones
+        shell: pwsh
+        run: |
+          $pub = "apps/dahua-agent/publish"
+
+          # Crear config.json de ejemplo
+          $config = @{
+            ServerUrl           = "https://helpdesk-os-production.up.railway.app"
+            AgentToken          = "PEGAR_AQUI_EL_TOKEN_DEL_AGENTE"
+            PollIntervalSeconds = 10
+          } | ConvertTo-Json -Depth 2
+          $config | Out-File "$pub/config.json" -Encoding utf8
+
+          # Crear README
+          $readme = @"
+          HelpDesk OS — Agente Dahua
+          ===========================
+
+          1. Edita config.json:
+             - AgentToken: obtenlo en HelpDesk OS -> Activos -> Token del agente
+               (O descárgalo directamente desde DVRs -> Descargar config.json)
+
+          2. Ejecuta DahuaAgent.exe como Administrador
+
+          El agente hace polling a HelpDesk OS y procesa búsquedas de
+          grabaciones en DVRs Dahua de tu red local.
+          "@
+          $readme | Out-File "$pub/LEEME.txt" -Encoding utf8
+
+          # Comprimir
+          Compress-Archive -Path "$pub/*" -DestinationPath "DahuaAgent-win-x64.zip" -Force
+          Write-Host "ZIP creado: $(Get-Item DahuaAgent-win-x64.zip | Select-Object -ExpandProperty Length) bytes"
+
+      - name: Subir a Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID:     ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION:    auto
+        run: |
+          aws s3 cp DahuaAgent-win-x64.zip `
+            s3://helpdesk-attachments/agents/DahuaAgent-win-x64.zip `
+            --endpoint-url https://cfaba925c4046955197eef7012fce9b1.r2.cloudflarestorage.com `
+            --content-type application/zip
+          Write-Host "✅ Agente subido a R2"
+        shell: pwsh
+
+      - name: Resumen
+        run: |
+          Write-Host "✅ DahuaAgent compilado y publicado correctamente"
+          Write-Host "📦 URL de descarga:"
+          Write-Host "   https://pub-e6d29f7bdc1442c9801e662bce630b61.r2.dev/agents/DahuaAgent-win-x64.zip"
+        shell: pwsh

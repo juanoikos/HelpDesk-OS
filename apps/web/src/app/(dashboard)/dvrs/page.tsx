@@ -435,28 +435,35 @@ export default function DvrsPage() {
           <div>
             <h2 className="text-white font-semibold mb-1">🖥️ Agente Dahua (búsqueda local)</h2>
             <p className="text-slate-400 text-sm">
-              Instala el agente en tu PC Windows para buscar grabaciones en DVRs de tu red local.
+              Ejecuta el agente en tu PC Windows para buscar grabaciones en DVRs de tu red local.
             </p>
           </div>
-          <a href="/api/agent/dahua-config" download="config.json"
-            className="shrink-0 bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
-            ⬇ Descargar config.json
-          </a>
+          <div className="flex gap-2 flex-wrap">
+            <a
+              href="https://pub-e6d29f7bdc1442c9801e662bce630b61.r2.dev/agents/DahuaAgent-win-x64.zip"
+              target="_blank" rel="noopener noreferrer"
+              className="shrink-0 bg-green-700 hover:bg-green-600 text-white text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+              ⬇ Descargar agente (.zip)
+            </a>
+            <a href="/api/agent/dahua-config" download="config.json"
+              className="shrink-0 bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+              ⬇ config.json
+            </a>
+          </div>
         </div>
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3 text-xs">
           <div className="bg-slate-800 rounded-xl p-3 space-y-1">
-            <p className="text-slate-300 font-medium">1. Instalar .NET 8</p>
-            <p className="text-slate-500">dotnet.microsoft.com/download</p>
+            <p className="text-slate-300 font-medium">1. Descargar el agente</p>
+            <p className="text-slate-500">Descarga el ZIP y extráelo en cualquier carpeta</p>
           </div>
           <div className="bg-slate-800 rounded-xl p-3 space-y-1">
-            <p className="text-slate-300 font-medium">2. Compilar el agente</p>
-            <code className="text-green-400 text-xs block">cd apps/dahua-agent</code>
-            <code className="text-green-400 text-xs block">dotnet build -c Release</code>
+            <p className="text-slate-300 font-medium">2. Descargar config.json</p>
+            <p className="text-slate-500">Colócalo en la misma carpeta del agente</p>
           </div>
           <div className="bg-slate-800 rounded-xl p-3 space-y-1">
-            <p className="text-slate-300 font-medium">3. Configurar y ejecutar</p>
-            <p className="text-slate-500">Pon el config.json junto al .exe y ejecuta</p>
+            <p className="text-slate-300 font-medium">3. Ejecutar</p>
             <code className="text-green-400 text-xs block">DahuaAgent.exe</code>
+            <p className="text-slate-500">El agente se queda activo esperando trabajos</p>
           </div>
         </div>
       </div>
