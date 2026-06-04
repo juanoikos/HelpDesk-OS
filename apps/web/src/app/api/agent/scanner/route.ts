@@ -197,10 +197,10 @@ $arpOutput = arp -a 2>$null
 $macTable  = @{}
 
 foreach ($line in $arpOutput) {
-    if ($line -match "(\d+\.\d+\.\d+\.\d+)\s+([\da-f-]{17})") {
+    if ($line -match "(\d+\.\d+\.\d+\.\d+)\s+([\da-fA-F-]{17})") {
         $ip  = $matches[1]
         $mac = $matches[2].Replace("-", ":").ToUpper()
-        $macTable[$ip] = $mac
+        if ($mac -ne "FF:FF:FF:FF:FF:FF") { $macTable[$ip] = $mac }
     }
 }
 
