@@ -87,7 +87,8 @@ function Invoke-Check {
                 $port    = if ($Target.port) { $Target.port } else { if ($Target.checkType -eq "https") { 443 } else { 80 } }
                 $path    = if ($Target.httpPath) { $Target.httpPath } else { "/" }
                 $url     = "$($Target.checkType)://$($Target.host):$port$path"
-                $timeout = [int]([math]::Max(1, [math]::Ceiling(($Target.timeout ?? 5000) / 1000)))
+                $timeoutVal = if ($Target.timeout) { $Target.timeout } else { 5000 }
+                $timeout = [int]([math]::Max(1, [math]::Ceiling($timeoutVal / 1000)))
                 try {
                     # Ignorar errores de certificado SSL en checks internos
                     Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
@@ -113,7 +114,8 @@ function Invoke-Check {
                         $result.error  = "Timeout"
                     } else {
                         $result.status = "down"
-                        $result.error  = $_.Exception.InnerException?.Message ?? $_.Exception.Message
+                        $innerMsg = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { $null }
+                        $result.error = if ($innerMsg) { $innerMsg } else { $_.Exception.Message }
                     }
                 }
             }
@@ -186,7 +188,8 @@ while ($true) {
                         $port    = if ($Target.port) { $Target.port } else { if ($Target.checkType -eq "https") { 443 } else { 80 } }
                         $path    = if ($Target.httpPath) { $Target.httpPath } else { "/" }
                         $url     = "$($Target.checkType)://$($Target.host):$port$path"
-                        $timeout = [int]([math]::Max(1, [math]::Ceiling(($Target.timeout ?? 5000)/1000)))
+                        $timeoutVal = if ($Target.timeout) { $Target.timeout } else { 5000 }
+                        $timeout = [int]([math]::Max(1, [math]::Ceiling($timeoutVal / 1000)))
                         try {
                             Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
                             $handler = New-Object System.Net.Http.HttpClientHandler
@@ -202,7 +205,8 @@ while ($true) {
                             $client.Dispose(); $handler.Dispose()
                         } catch {
                             $result.status = if ($_.Exception.Message -match "timeout|cancel") { "timeout" } else { "down" }
-                            $result.error  = $_.Exception.InnerException?.Message ?? $_.Exception.Message
+                            $innerMsg = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { $null }
+                            $result.error = if ($innerMsg) { $innerMsg } else { $_.Exception.Message }
                         }
                     }
                 }
