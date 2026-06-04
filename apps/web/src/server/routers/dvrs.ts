@@ -215,12 +215,14 @@ export const dvrsRouter = router({
   }),
 
   // ── Buscar grabaciones en un DVR (Dahua HTTP API) ───────────────────────────
-  // channel = 0 → todas las cámaras
+  // channels: array de canales (vacío = todos)
   findRecordings: protectedProcedure
     .input(z.object({
-      dvrId:   z.string(),
-      channel: z.number().int().min(0), // 0 = todas
-      date:    z.string(), // "YYYY-MM-DD"
+      dvrId:     z.string(),
+      channels:  z.array(z.number().int().min(1)), // [] = todos
+      date:      z.string(),       // "YYYY-MM-DD"
+      startTime: z.string().default("00:00"), // "HH:MM"
+      endTime:   z.string().default("23:59"), // "HH:MM"
     }))
     .query(async ({ input, ctx }) => {
       requireAdmin(ctx.session.user.role);
@@ -235,14 +237,14 @@ export const dvrsRouter = router({
 
       const password    = decrypt(cred.password);
       const base        = `http://${dvr.ip}:${dvr.port}`;
-      const start       = `${input.date} 00:00:00`;
-      const end         = `${input.date} 23:59:59`;
+      const start       = `${input.date} ${input.startTime}:00`;
+      const end         = `${input.date} ${input.endTime}:59`;
       const authHeader  = buildDigestAuth(cred.username, password);
 
-      // Canales a consultar: 0 = todos, n = uno específico
-      const channels = input.channel === 0
+      // Canales a consultar: array vacío = todos
+      const channels = input.channels.length === 0
         ? Array.from({ length: dvr.channels }, (_, i) => i + 1)
-        : [input.channel];
+        : input.channels;
 
       async function fetchChannel(ch: number) {
         const url = `${base}/cgi-bin/mediaFileFind.cgi?action=findFile&object=0&condition.Channel=${ch}&condition.StartTime=${encodeURIComponent(start)}&condition.EndTime=${encodeURIComponent(end)}&condition.Flags[0]=General`;
