@@ -129,23 +129,26 @@ Write-Host ""
 Write-Host "  [1/4] Escaneando red ($subnet.1 - $subnet.254)..." -ForegroundColor Yellow
 Write-Host "        Esto puede tomar 30-60 segundos..." -ForegroundColor DarkGray
 
-# ---- Ping sweep paralelo ----
-$pingJobs = @()
-1..254 | ForEach-Object {
-    $ip = "$subnet.$_"
-    $pingJobs += Start-Job -ScriptBlock {
-        param($ip)
-        $result = ping -n 1 -w 300 $ip 2>$null
-        if ($LASTEXITCODE -eq 0) { $ip }
-    } -ArgumentList $ip
+# ---- Ping sweep paralelo (async .NET — sin procesos extra) ----
+$pingTasks = 1..254 | ForEach-Object {
+    $ip   = "$subnet.$_"
+    $ping = [System.Net.NetworkInformation.Ping]::new()
+    [PSCustomObject]@{ ip = $ip; task = $ping.SendPingAsync($ip, 400); ping = $ping }
 }
 
-# Esperar todos los pings
-$activeIPs = @()
-$pingJobs | ForEach-Object {
-    $result = $_ | Wait-Job | Receive-Job
-    if ($result) { $activeIPs += $result }
-    $_ | Remove-Job -Force
+# Esperar todas las tareas a la vez
+[System.Threading.Tasks.Task]::WaitAll($pingTasks.task)
+
+$activeIPs = $pingTasks | Where-Object {
+    $_.task.Result.Status -eq [System.Net.NetworkInformation.IPStatus]::Success
+} | ForEach-Object {
+    $_.ping.Dispose()
+    $_.ip
+}
+
+# Limpiar pings fallidos
+$pingTasks | Where-Object { $_.task.Result.Status -ne [System.Net.NetworkInformation.IPStatus]::Success } | ForEach-Object {
+    $_.ping.Dispose()
 }
 
 Write-Host "  Hosts activos encontrados: $($activeIPs.Count)" -ForegroundColor Green
