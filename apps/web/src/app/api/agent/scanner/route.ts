@@ -132,7 +132,13 @@ if ($adapters) {
     $localIP = $adapters.IPAddress
     $parts   = $localIP.Split(".")
     $subnet  = "$($parts[0]).$($parts[1]).$($parts[2])"
+
+    # MAC del adaptador local (no aparece en ARP porque es la propia máquina)
+    $localAdapter = Get-NetAdapter -InterfaceIndex $adapters.InterfaceIndex -ErrorAction SilentlyContinue
+    $localMAC = if ($localAdapter) { $localAdapter.MacAddress.Replace("-",":").ToUpper() } else { $null }
+
     Write-Host "  IP local   : $localIP" -ForegroundColor White
+    Write-Host "  MAC local  : $localMAC" -ForegroundColor White
     Write-Host "  Subred     : $subnet.0/24" -ForegroundColor White
 } else {
     Write-Host "  ERROR: No se pudo detectar la subred." -ForegroundColor Red
@@ -306,7 +312,12 @@ foreach ($ipRaw in ($activeIPs | Sort-Object { try { [Version]$_ } catch { $_ } 
     $current++
     Write-Host "  [$current/$total] $ip..." -ForegroundColor DarkGray -NoNewline
 
-    $mac       = if ($macTable.ContainsKey($ip)) { [string]$macTable[$ip] } else { $null }
+    # Para la IP local, tomar MAC del adaptador directamente (no aparece en ARP)
+    $mac = if ($ip -eq $localIP -and $localMAC) {
+        [string]$localMAC
+    } elseif ($macTable.ContainsKey($ip)) {
+        [string]$macTable[$ip]
+    } else { $null }
     $vendor    = if ($mac) { [string](Get-Vendor $mac) } else { "Desconocido" }
     $openPorts = [int[]]@()
 
