@@ -82,7 +82,7 @@ export default function DvrRecordingsPage() {
   const recordings = searched
     ? (result?.recordings ?? [])
     : localStatus === "done" ? localResults : [];
-  const localIp  = result?.localIp ?? dvr?.localIp ?? null;
+  const localIp  = result?.localIp ?? dvr?.localIp ?? dvr?.ip ?? null;
   const dvrPort  = result?.port ?? dvr?.port ?? 80;
   const multiChannel = selectedChannels.size !== 1;
 
@@ -194,7 +194,7 @@ export default function DvrRecordingsPage() {
             className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-5 py-2 rounded-lg transition-colors">
             {isFetching ? "Buscando…" : "🌐 Buscar remoto"}
           </button>
-          {dvr?.localIp && (
+          {(dvr?.localIp ?? dvr?.ip) && (
             <button onClick={handleSearchLocal} disabled={createScanJob.isPending || localStatus === "waiting"}
               title="Descarga un agente que busca en la red local y envía los resultados"
               className="bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white text-sm px-5 py-2 rounded-lg transition-colors">
