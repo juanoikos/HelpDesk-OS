@@ -55,6 +55,8 @@ export async function GET(req: NextRequest) {
       id:        job.id,
       dvrName:   dvr.name,
       serial:    dvr.serial,
+      localIp:   dvr.localIp   ?? "",
+      localPort: (dvr as { localPort?: number }).localPort ?? 80,
       username,
       password,
       channels:  job.channels as number[],
