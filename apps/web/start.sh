@@ -64,6 +64,40 @@ ALTER TABLE "assets" ADD COLUMN IF NOT EXISTS "lastSeenAt" TIMESTAMP(3);
 ALTER TABLE "assets" ADD COLUMN IF NOT EXISTS "hardwareData" JSONB;
 ALTER TABLE "tenant_settings" ADD COLUMN IF NOT EXISTS "agentToken" TEXT;
 
+CREATE TABLE IF NOT EXISTS "dvr_credentials" (
+  "id"        TEXT         NOT NULL,
+  "tenantId"  TEXT         NOT NULL,
+  "username"  TEXT         NOT NULL DEFAULT 'admin',
+  "password"  TEXT         NOT NULL DEFAULT '',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "dvr_credentials_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "dvr_credentials_tenantId_key" UNIQUE ("tenantId"),
+  CONSTRAINT "dvr_credentials_tenantId_fkey"
+    FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+DO $$ BEGIN CREATE TYPE "DvrStatus" AS ENUM ('ONLINE','OFFLINE','UNKNOWN'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "dvrs" (
+  "id"          TEXT         NOT NULL,
+  "tenantId"    TEXT         NOT NULL,
+  "name"        TEXT         NOT NULL,
+  "ip"          TEXT         NOT NULL,
+  "port"        INTEGER      NOT NULL DEFAULT 80,
+  "channels"    INTEGER      NOT NULL DEFAULT 8,
+  "location"    TEXT,
+  "notes"       TEXT,
+  "status"      "DvrStatus"  NOT NULL DEFAULT 'UNKNOWN',
+  "lastChecked" TIMESTAMP(3),
+  "createdAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "dvrs_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "dvrs_tenantId_ip_key" UNIQUE ("tenantId", "ip"),
+  CONSTRAINT "dvrs_tenantId_fkey"
+    FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS "ticket_attachments" (
   "id"        TEXT         NOT NULL,
   "ticketId"  TEXT         NOT NULL,

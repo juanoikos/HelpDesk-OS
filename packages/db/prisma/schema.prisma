@@ -31,6 +31,8 @@ model Tenant {
   settings        TenantSettings?
   cannedResponses CannedResponse[]
   networkDevices  NetworkDevice[]
+  dvrs            Dvr[]
+  dvrCredential   DvrCredential?
 
   @@map("tenants")
 }
@@ -419,4 +421,45 @@ model NetworkDevice {
 
   @@unique([tenantId, ip])
   @@map("network_devices")
+}
+
+// ─── DVRs / NVRs ─────────────────────────────────────────────────────────────
+
+model DvrCredential {
+  id        String @id @default(cuid())
+  tenantId  String @unique
+  username  String @default("admin")
+  password  String // cifrada con AES antes de guardar
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("dvr_credentials")
+}
+
+model Dvr {
+  id          String    @id @default(cuid())
+  tenantId    String
+  name        String                        // nombre descriptivo ej: "Sede Norte - Bodega"
+  ip          String
+  port        Int       @default(80)
+  channels    Int       @default(8)         // 8 / 16 / 32
+  location    String?                       // sede / dirección
+  notes       String?
+  status      DvrStatus @default(UNKNOWN)
+  lastChecked DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, ip])
+  @@map("dvrs")
+}
+
+enum DvrStatus {
+  ONLINE
+  OFFLINE
+  UNKNOWN
 }

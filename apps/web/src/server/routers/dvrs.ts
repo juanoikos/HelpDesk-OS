@@ -1,0 +1,279 @@
+import { z } from "zod";
+import { router, protectedProcedure } from "../trpc";
+import { prisma } from "@helpdesk-os/db";
+import { TRPCError } from "@trpc/server";
+import crypto from "crypto";
+
+// ─── Cifrado simple AES-256 para contraseñas DVR ────────────────────────────
+const ENC_KEY = (process.env.AUTH_SECRET ?? "helpdesk-dvr-secret-key-32chars!").slice(0, 32);
+const IV_LEN  = 16;
+
+function encrypt(text: string): string {
+  const iv  = crypto.randomBytes(IV_LEN);
+  const c   = crypto.createCipheriv("aes-256-cbc", Buffer.from(ENC_KEY), iv);
+  const enc = Buffer.concat([c.update(text, "utf8"), c.final()]);
+  return iv.toString("hex") + ":" + enc.toString("hex");
+}
+
+function decrypt(text: string): string {
+  const [ivHex, encHex] = text.split(":");
+  const iv  = Buffer.from(ivHex,  "hex");
+  const enc = Buffer.from(encHex, "hex");
+  const d   = crypto.createDecipheriv("aes-256-cbc", Buffer.from(ENC_KEY), iv);
+  return Buffer.concat([d.update(enc), d.final()]).toString("utf8");
+}
+
+function requireAdmin(role: string) {
+  if (role !== "ADMIN") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Solo administradores" });
+  }
+}
+
+// ─── Router ──────────────────────────────────────────────────────────────────
+
+export const dvrsRouter = router({
+
+  // ── Credencial global del tenant ────────────────────────────────────────────
+  getCredential: protectedProcedure.query(async ({ ctx }) => {
+    requireAdmin(ctx.session.user.role);
+    const cred = await prisma.dvrCredential.findUnique({
+      where: { tenantId: ctx.session.user.tenantId },
+    });
+    return cred ? { username: cred.username, hasPassword: true } : null;
+  }),
+
+  saveCredential: protectedProcedure
+    .input(z.object({
+      username: z.string().min(1).default("admin"),
+      password: z.string().min(1),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      const tenantId = ctx.session.user.tenantId;
+      return prisma.dvrCredential.upsert({
+        where:  { tenantId },
+        create: { tenantId, username: input.username, password: encrypt(input.password) },
+        update: { username: input.username, password: encrypt(input.password) },
+      });
+    }),
+
+  // ── CRUD DVRs ───────────────────────────────────────────────────────────────
+  list: protectedProcedure.query(async ({ ctx }) => {
+    requireAdmin(ctx.session.user.role);
+    return prisma.dvr.findMany({
+      where:   { tenantId: ctx.session.user.tenantId },
+      orderBy: [{ location: "asc" }, { name: "asc" }],
+    });
+  }),
+
+  create: protectedProcedure
+    .input(z.object({
+      name:     z.string().min(1).max(100),
+      ip:       z.string().min(1),
+      port:     z.number().int().default(80),
+      channels: z.number().int().refine(v => [4, 8, 16, 32].includes(v)).default(8),
+      location: z.string().max(100).optional(),
+      notes:    z.string().max(300).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      return prisma.dvr.create({
+        data: { tenantId: ctx.session.user.tenantId, ...input },
+      });
+    }),
+
+  update: protectedProcedure
+    .input(z.object({
+      id:       z.string(),
+      name:     z.string().min(1).max(100).optional(),
+      ip:       z.string().min(1).optional(),
+      port:     z.number().int().optional(),
+      channels: z.number().int().optional(),
+      location: z.string().max(100).optional().nullable(),
+      notes:    z.string().max(300).optional().nullable(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      const { id, ...data } = input;
+      return prisma.dvr.update({
+        where: { id, tenantId: ctx.session.user.tenantId } as { id: string },
+        data,
+      });
+    }),
+
+  delete: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      return prisma.dvr.delete({
+        where: { id: input.id, tenantId: ctx.session.user.tenantId } as { id: string },
+      });
+    }),
+
+  // ── Importación masiva por CSV/JSON ─────────────────────────────────────────
+  bulkImport: protectedProcedure
+    .input(z.array(z.object({
+      name:     z.string().min(1),
+      ip:       z.string().min(1),
+      port:     z.number().int().default(80),
+      channels: z.number().int().default(8),
+      location: z.string().optional(),
+    })))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      const tenantId = ctx.session.user.tenantId;
+      let created = 0;
+      let skipped = 0;
+      for (const row of input) {
+        const exists = await prisma.dvr.findFirst({ where: { tenantId, ip: row.ip } });
+        if (exists) { skipped++; continue; }
+        await prisma.dvr.create({ data: { tenantId, ...row } });
+        created++;
+      }
+      return { created, skipped };
+    }),
+
+  // ── Verificar conectividad de un DVR ────────────────────────────────────────
+  checkStatus: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      const dvr = await prisma.dvr.findFirst({
+        where: { id: input.id, tenantId: ctx.session.user.tenantId },
+      });
+      if (!dvr) throw new TRPCError({ code: "NOT_FOUND" });
+
+      let online = false;
+      try {
+        const url  = `http://${dvr.ip}:${dvr.port}/`;
+        const ctrl = new AbortController();
+        const t    = setTimeout(() => ctrl.abort(), 4000);
+        const res  = await fetch(url, { signal: ctrl.signal, method: "HEAD" });
+        clearTimeout(t);
+        online = res.status < 600;
+      } catch {}
+
+      const status = online ? "ONLINE" : "OFFLINE";
+      await prisma.dvr.update({
+        where: { id: dvr.id },
+        data:  { status: status as "ONLINE" | "OFFLINE", lastChecked: new Date() },
+      });
+      return { status };
+    }),
+
+  // ── Verificar todos los DVRs del tenant ─────────────────────────────────────
+  checkAll: protectedProcedure.mutation(async ({ ctx }) => {
+    requireAdmin(ctx.session.user.role);
+    const tenantId = ctx.session.user.tenantId;
+    const dvrs     = await prisma.dvr.findMany({ where: { tenantId } });
+
+    const results = await Promise.all(dvrs.map(async (dvr) => {
+      let online = false;
+      try {
+        const url  = `http://${dvr.ip}:${dvr.port}/`;
+        const ctrl = new AbortController();
+        const t    = setTimeout(() => ctrl.abort(), 4000);
+        const res  = await fetch(url, { signal: ctrl.signal, method: "HEAD" });
+        clearTimeout(t);
+        online = res.status < 600;
+      } catch {}
+      const status = (online ? "ONLINE" : "OFFLINE") as "ONLINE" | "OFFLINE";
+      await prisma.dvr.update({
+        where: { id: dvr.id },
+        data:  { status, lastChecked: new Date() },
+      });
+      return { id: dvr.id, status };
+    }));
+
+    const online  = results.filter(r => r.status === "ONLINE").length;
+    const offline = results.filter(r => r.status === "OFFLINE").length;
+    return { total: dvrs.length, online, offline };
+  }),
+
+  // ── Buscar grabaciones en un DVR (Dahua HTTP API) ───────────────────────────
+  findRecordings: protectedProcedure
+    .input(z.object({
+      dvrId:   z.string(),
+      channel: z.number().int().min(1),
+      date:    z.string(), // "YYYY-MM-DD"
+    }))
+    .query(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      const tenantId = ctx.session.user.tenantId;
+
+      const [dvr, cred] = await Promise.all([
+        prisma.dvr.findFirst({ where: { id: input.dvrId, tenantId } }),
+        prisma.dvrCredential.findUnique({ where: { tenantId } }),
+      ]);
+      if (!dvr)  throw new TRPCError({ code: "NOT_FOUND", message: "DVR no encontrado" });
+      if (!cred) throw new TRPCError({ code: "BAD_REQUEST", message: "Configura las credenciales primero" });
+
+      const password = decrypt(cred.password);
+      const base     = `http://${dvr.ip}:${dvr.port}`;
+      const start    = `${input.date} 00:00:00`;
+      const end      = `${input.date} 23:59:59`;
+
+      // Dahua mediaFileFind CGI
+      const authHeader = buildDigestAuth(cred.username, password);
+      const url = `${base}/cgi-bin/mediaFileFind.cgi?action=findFile&object=0&condition.Channel=${input.channel}&condition.StartTime=${encodeURIComponent(start)}&condition.EndTime=${encodeURIComponent(end)}&condition.Flags[0]=General`;
+
+      let recordings: { start: string; end: string; size: number; filePath: string }[] = [];
+      try {
+        const ctrl = new AbortController();
+        const t    = setTimeout(() => ctrl.abort(), 8000);
+        const res  = await fetch(url, {
+          signal:  ctrl.signal,
+          headers: { Authorization: authHeader },
+        });
+        clearTimeout(t);
+
+        if (res.ok) {
+          const text = await res.text();
+          // Parsear respuesta Dahua (formato key=value por línea)
+          recordings = parseDahuaFileFind(text, base, input.channel);
+        }
+      } catch (e) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `No se pudo conectar al DVR: ${String(e)}` });
+      }
+
+      return recordings;
+    }),
+});
+
+// ─── Helpers Dahua ───────────────────────────────────────────────────────────
+
+function buildDigestAuth(username: string, password: string): string {
+  // Basic auth como primer intento (Dahua acepta ambos)
+  const b64 = Buffer.from(`${username}:${password}`).toString("base64");
+  return `Basic ${b64}`;
+}
+
+function parseDahuaFileFind(text: string, baseUrl: string, channel: number) {
+  // La respuesta Dahua viene en formato:
+  // found=N
+  // items[0].FilePath=/mnt/dvr/...
+  // items[0].StartTime=2024/01/01 08:00:00
+  // items[0].EndTime=2024/01/01 09:00:00
+  // items[0].Length=123456789
+
+  const recordings: { start: string; end: string; size: number; filePath: string }[] = [];
+  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+
+  const found = parseInt(lines.find(l => l.startsWith("found="))?.split("=")[1] ?? "0");
+  if (!found) return recordings;
+
+  for (let i = 0; i < found; i++) {
+    const get = (key: string) =>
+      lines.find(l => l.startsWith(`items[${i}].${key}=`))?.split("=").slice(1).join("=") ?? "";
+
+    const filePath = get("FilePath");
+    const start    = get("StartTime").replace(/\//g, "-");
+    const end      = get("EndTime").replace(/\//g, "-");
+    const size     = parseInt(get("Length") ?? "0");
+
+    if (filePath) {
+      recordings.push({ start, end, size, filePath });
+    }
+  }
+  return recordings;
+}
