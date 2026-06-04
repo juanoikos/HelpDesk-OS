@@ -438,32 +438,24 @@ export default function DvrsPage() {
               Ejecuta el agente en tu PC Windows para buscar grabaciones en DVRs de tu red local.
             </p>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <a
-              href="https://pub-e6d29f7bdc1442c9801e662bce630b61.r2.dev/agents/DahuaAgent-win-x64.zip"
-              target="_blank" rel="noopener noreferrer"
-              className="shrink-0 bg-green-700 hover:bg-green-600 text-white text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
-              ⬇ Descargar agente (.zip)
-            </a>
-            <a href="/api/agent/dahua-config" download="config.json"
-              className="shrink-0 bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
-              ⬇ config.json
-            </a>
-          </div>
+          <a href="/api/agent/dahua-download" download="DahuaAgent.zip"
+            className="shrink-0 bg-green-700 hover:bg-green-600 text-white text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+            ⬇ Descargar agente (.zip)
+          </a>
         </div>
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3 text-xs">
           <div className="bg-slate-800 rounded-xl p-3 space-y-1">
-            <p className="text-slate-300 font-medium">1. Descargar el agente</p>
-            <p className="text-slate-500">Descarga el ZIP y extráelo en cualquier carpeta</p>
+            <p className="text-slate-300 font-medium">1. Descargar el ZIP</p>
+            <p className="text-slate-500">El ZIP ya incluye el agente + config con tu token listo</p>
           </div>
           <div className="bg-slate-800 rounded-xl p-3 space-y-1">
-            <p className="text-slate-300 font-medium">2. Descargar config.json</p>
-            <p className="text-slate-500">Colócalo en la misma carpeta del agente</p>
+            <p className="text-slate-300 font-medium">2. Extraer en cualquier carpeta</p>
+            <p className="text-slate-500">Requiere .NET 8 Runtime instalado en la PC</p>
           </div>
           <div className="bg-slate-800 rounded-xl p-3 space-y-1">
-            <p className="text-slate-300 font-medium">3. Ejecutar</p>
+            <p className="text-slate-300 font-medium">3. Ejecutar y listo</p>
             <code className="text-green-400 text-xs block">DahuaAgent.exe</code>
-            <p className="text-slate-500">El agente se queda activo esperando trabajos</p>
+            <p className="text-slate-500">El agente queda activo esperando trabajos</p>
           </div>
         </div>
       </div>
