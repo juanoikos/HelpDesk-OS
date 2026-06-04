@@ -55,6 +55,24 @@ export default function DvrsPage() {
   });
   const deleteDvr = trpc.dvrs.delete.useMutation({ onSuccess: () => utils.dvrs.list.invalidate(), onError: (e) => alert(e.message) });
   const checkOne  = trpc.dvrs.checkStatus.useMutation({ onSuccess: () => utils.dvrs.list.invalidate() });
+
+  // Test local desde el browser (sin pasar por Railway)
+  const [localTestResults, setLocalTestResults] = useState<Record<string, "testing" | "online" | "offline">>({});
+
+  async function testLocalConnection(dvrId: string, localIp: string, port: number) {
+    setLocalTestResults(prev => ({ ...prev, [dvrId]: "testing" }));
+    const ports = [port, 80, 8080, 8000, 443, 9000];
+    let found = false;
+    for (const p of ports) {
+      try {
+        // no-cors: si el servidor responde (cualquier respuesta), resuelve; si no, lanza error
+        await fetch(`http://${localIp}:${p}/`, { method: "HEAD", mode: "no-cors", signal: AbortSignal.timeout(3000) });
+        found = true;
+        break;
+      } catch {}
+    }
+    setLocalTestResults(prev => ({ ...prev, [dvrId]: found ? "online" : "offline" }));
+  }
   const checkAll  = trpc.dvrs.checkAll.useMutation({
     onSuccess: (r) => { utils.dvrs.list.invalidate(); setCheckingAll(false); alert(`✅ Online: ${r.online} | ❌ Offline: ${r.offline}`); },
   });
@@ -401,13 +419,35 @@ export default function DvrsPage() {
                     {dvr.lastChecked ? new Date(dvr.lastChecked).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" }) : "—"}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                       <Link href={`/dvrs/${dvr.id}`}
                         className="text-blue-400 hover:text-blue-300 text-xs transition-colors font-medium">
                         🎬 Grabaciones
                       </Link>
+                      {/* Test local — solo si tiene localIp */}
+                      {dvr.localIp && (() => {
+                        const localState = localTestResults[dvr.id];
+                        return (
+                          <button
+                            onClick={() => testLocalConnection(dvr.id, dvr.localIp!, dvr.port)}
+                            disabled={localState === "testing"}
+                            className={`text-xs px-2 py-1 rounded-lg border transition-colors disabled:opacity-50
+                              ${localState === "online"  ? "border-green-700 text-green-400 bg-green-900/20" :
+                                localState === "offline" ? "border-red-800 text-red-400 bg-red-900/20" :
+                                localState === "testing" ? "border-slate-700 text-slate-400" :
+                                "border-slate-700 text-slate-500 hover:text-green-400 hover:border-green-800"}`}
+                            title="Prueba si el DVR es accesible desde tu red local (sin pasar por el servidor)"
+                          >
+                            {localState === "testing" ? "🔄 Probando…" :
+                             localState === "online"  ? "🏠 Local ✓" :
+                             localState === "offline" ? "🏠 Local ✗" :
+                             "🏠 Probar local"}
+                          </button>
+                        );
+                      })()}
                       <button onClick={() => checkOne.mutate({ id: dvr.id })}
                         disabled={checkOne.isPending}
+                        title="Verificar desde el servidor (necesita IP pública)"
                         className="text-slate-500 hover:text-yellow-400 text-xs transition-colors">
                         ⚡
                       </button>
