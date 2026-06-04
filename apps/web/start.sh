@@ -97,7 +97,9 @@ CREATE TABLE IF NOT EXISTS "dvrs" (
   CONSTRAINT "dvrs_tenantId_fkey"
     FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE "dvrs" ADD COLUMN IF NOT EXISTS "localIp" TEXT;
+ALTER TABLE "dvrs" ADD COLUMN IF NOT EXISTS "localIp"   TEXT;
+ALTER TABLE "dvrs" ADD COLUMN IF NOT EXISTS "username"  TEXT;
+ALTER TABLE "dvrs" ADD COLUMN IF NOT EXISTS "password"  TEXT;
 
 CREATE TABLE IF NOT EXISTS "ticket_attachments" (
   "id"        TEXT         NOT NULL,

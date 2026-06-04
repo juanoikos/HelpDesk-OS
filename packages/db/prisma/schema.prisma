@@ -446,6 +446,8 @@ model Dvr {
   localIp     String?                       // IP local (192.168.x.x) para acceso dentro de la red
   port        Int       @default(80)
   channels    Int       @default(8)         // 8 / 16 / 32
+  username    String?                       // credencial propia (si es null usa la global)
+  password    String?                       // cifrada con AES (si es null usa la global)
   location    String?                       // sede / dirección
   notes       String?
   status      DvrStatus @default(UNKNOWN)

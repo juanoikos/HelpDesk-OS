@@ -37,12 +37,15 @@ export default function DvrsPage() {
   const [credOk,   setCredOk]   = useState(false);
 
   // Form nuevo DVR
-  const [newName,     setNewName]     = useState("");
-  const [newIp,       setNewIp]       = useState("");
-  const [newLocalIp,  setNewLocalIp]  = useState("");
-  const [newPort,     setNewPort]     = useState("80");
-  const [newChannels, setNewChannels] = useState("8");
-  const [newLocation, setNewLocation] = useState("");
+  const [newName,      setNewName]      = useState("");
+  const [newIp,        setNewIp]        = useState("");
+  const [newLocalIp,   setNewLocalIp]   = useState("");
+  const [newPort,      setNewPort]      = useState("80");
+  const [newChannels,  setNewChannels]  = useState("8");
+  const [newLocation,  setNewLocation]  = useState("");
+  const [useOwnCred,   setUseOwnCred]   = useState(false);
+  const [newUsername,  setNewUsername]  = useState("admin");
+  const [newPassword,  setNewPassword]  = useState("");
 
   // Import CSV
   const fileRef = useRef<HTMLInputElement>(null);
@@ -50,7 +53,7 @@ export default function DvrsPage() {
 
   const saveCred  = trpc.dvrs.saveCredential.useMutation({ onSuccess: () => { utils.dvrs.getCredential.invalidate(); setCredOk(true); } });
   const createDvr = trpc.dvrs.create.useMutation({
-    onSuccess: () => { utils.dvrs.list.invalidate(); setShowAdd(false); setNewName(""); setNewIp(""); setNewLocalIp(""); setNewPort("80"); setNewChannels("8"); setNewLocation(""); },
+    onSuccess: () => { utils.dvrs.list.invalidate(); setShowAdd(false); setNewName(""); setNewIp(""); setNewLocalIp(""); setNewPort("80"); setNewChannels("8"); setNewLocation(""); setUseOwnCred(false); setNewUsername("admin"); setNewPassword(""); },
     onError:   (e) => alert(e.message),
   });
   const deleteDvr = trpc.dvrs.delete.useMutation({ onSuccess: () => utils.dvrs.list.invalidate(), onError: (e) => alert(e.message) });
@@ -329,12 +332,44 @@ export default function DvrsPage() {
               </div>
               <input value={newLocation} onChange={e => setNewLocation(e.target.value)} placeholder="Sede / Ubicación (opcional)"
                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+
+              {/* Credenciales */}
+              <div className="border border-slate-700 rounded-xl p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-xs font-medium">🔑 Credenciales</span>
+                  <button type="button" onClick={() => setUseOwnCred(v => !v)}
+                    className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${useOwnCred ? "border-blue-600 text-blue-400 bg-blue-900/20" : "border-slate-700 text-slate-500 hover:border-slate-500"}`}>
+                    {useOwnCred ? "✓ Credencial propia" : "Usar credencial global"}
+                  </button>
+                </div>
+                {!useOwnCred ? (
+                  <p className="text-slate-600 text-xs">
+                    Usará la credencial global configurada en {cred ? `"${cred.username}"` : "—"}. Puedes sobreescribirla activando la credencial propia.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <input value={newUsername} onChange={e => setNewUsername(e.target.value)} placeholder="Usuario"
+                      className="bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                    <input value={newPassword} onChange={e => setNewPassword(e.target.value)} type="password" placeholder="Contraseña"
+                      className="bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-white text-sm px-4 py-2">Cancelar</button>
               <button
-                onClick={() => createDvr.mutate({ name: newName, ip: newIp || newLocalIp, localIp: newLocalIp || undefined, port: parseInt(newPort) || 80, channels: parseInt(newChannels) || 8, location: newLocation || undefined })}
-                disabled={createDvr.isPending || !newName.trim() || (!newIp.trim() && !newLocalIp.trim())}
+                onClick={() => createDvr.mutate({
+                  name:     newName,
+                  ip:       newIp || newLocalIp,
+                  localIp:  newLocalIp || undefined,
+                  port:     parseInt(newPort) || 80,
+                  channels: parseInt(newChannels) || 8,
+                  location: newLocation || undefined,
+                  username: useOwnCred && newUsername ? newUsername : undefined,
+                  password: useOwnCred && newPassword ? newPassword : undefined,
+                })}
+                disabled={createDvr.isPending || !newName.trim() || (!newIp.trim() && !newLocalIp.trim()) || (useOwnCred && !newPassword.trim())}
                 className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg">
                 {createDvr.isPending ? "Guardando…" : "Agregar"}
               </button>
