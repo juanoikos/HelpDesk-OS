@@ -13,12 +13,41 @@ function requireAdmin(role: string) {
 }
 
 export const networkDevicesRouter = router({
-  // ── Listar todos los dispositivos del tenant ────────────────────────────────
+  // ── Listar todos los dispositivos del tenant (con cruce a Activos) ──────────
   list: protectedProcedure.query(async ({ ctx }) => {
-    return prisma.networkDevice.findMany({
-      where:   { tenantId: ctx.session.user.tenantId },
-      orderBy: [{ deviceType: "asc" }, { ip: "asc" }],
-    });
+    const tenantId = ctx.session.user.tenantId;
+
+    const [devices, assets] = await Promise.all([
+      prisma.networkDevice.findMany({
+        where:   { tenantId },
+        orderBy: [{ deviceType: "asc" }, { ip: "asc" }],
+      }),
+      prisma.asset.findMany({
+        where:  { tenantId, hostname: { not: null } },
+        select: {
+          id:        true,
+          hostname:  true,
+          username:  true,
+          cpu:       true,
+          ramGB:     true,
+          diskInfo:  true,
+          osName:    true,
+          type:      true,
+          status:    true,
+          assetNumber: true,
+        },
+      }),
+    ]);
+
+    // Índice de activos por hostname (case-insensitive)
+    const assetByHostname = new Map(
+      assets.map((a) => [a.hostname!.toLowerCase(), a])
+    );
+
+    return devices.map((d) => ({
+      ...d,
+      asset: d.hostname ? (assetByHostname.get(d.hostname.toLowerCase()) ?? null) : null,
+    }));
   }),
 
   // ── Información del último scan ────────────────────────────────────────────

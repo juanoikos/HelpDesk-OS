@@ -273,6 +273,7 @@ export default function NetworkPage() {
                   <th className="text-left text-slate-500 text-xs font-medium px-4 py-3">Puertos</th>
                   <th className="text-left text-slate-500 text-xs font-medium px-4 py-3">Título HTTP</th>
                   <th className="text-left text-slate-500 text-xs font-medium px-4 py-3">ONVIF</th>
+                  <th className="text-left text-slate-500 text-xs font-medium px-4 py-3">Activo</th>
                   <th className="text-left text-slate-500 text-xs font-medium px-4 py-3">Última vez</th>
                   <th className="text-left text-slate-500 text-xs font-medium px-4 py-3"></th>
                 </tr>
@@ -329,6 +330,22 @@ export default function NetworkPage() {
                         <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-green-900 text-green-300 border border-green-700">
                           ONVIF
                         </span>
+                      ) : (
+                        <span className="text-slate-700 text-xs">—</span>
+                      )}
+                    </td>
+
+                    {/* Activo vinculado */}
+                    <td className="px-4 py-3">
+                      {device.asset ? (
+                        <a href="/assets" className="group/asset flex flex-col gap-0.5">
+                          <span className="inline-flex items-center gap-1 text-xs text-green-400 font-medium hover:text-green-300 transition-colors">
+                            ✅ {device.asset.username ?? device.asset.hostname}
+                          </span>
+                          <span className="text-slate-600 text-xs leading-tight">
+                            {[device.asset.cpu?.split(" ").slice(0,3).join(" "), device.asset.ramGB ? `${device.asset.ramGB}GB` : null].filter(Boolean).join(" · ")}
+                          </span>
+                        </a>
                       ) : (
                         <span className="text-slate-700 text-xs">—</span>
                       )}
