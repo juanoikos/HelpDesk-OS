@@ -1,7 +1,7 @@
 "use client";
 
 import { trpc } from "@/trpc/react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
@@ -34,46 +34,84 @@ export default function DvrRecordingsPage() {
   const [date,      setDate]      = useState(today!);
   const [startTime, setStartTime] = useState("00:00");
   const [endTime,   setEndTime]   = useState("23:59");
-  const [searched,  setSearched]  = useState(false);
+  const [searched,     setSearched]     = useState(false);
+  const [localJobId,   setLocalJobId]   = useState<string | null>(null);
+  const [localStatus,  setLocalStatus]  = useState<"idle"|"waiting"|"done"|"error">("idle");
+  const [localResults, setLocalResults] = useState<{channel:number;start:string;end:string;size:number;filePath:string}[]>([]);
+  const [localError,   setLocalError]   = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Query principal (servidor Railway → IP pública)
   const { data: result, isFetching, refetch, error } = trpc.dvrs.findRecordings.useQuery(
-    {
-      dvrId:     id,
-      channels:  Array.from(selectedChannels),
-      date,
-      startTime,
-      endTime,
-    },
+    { dvrId: id, channels: Array.from(selectedChannels), date, startTime, endTime },
     { enabled: false }
   );
 
-  const recordings = result?.recordings ?? [];
-  const localIp    = result?.localIp ?? null;
-  const dvrPort    = result?.port ?? 80;
+  // Polling del job local
+  const { data: jobData, refetch: pollJob } = trpc.dvrs.getScanJob.useQuery(
+    { jobId: localJobId ?? "" },
+    { enabled: false }
+  );
 
-  // Canales mostrados en el resultado (para columna)
+  const createScanJob = trpc.dvrs.createScanJob.useMutation({
+    onSuccess: async ({ jobId }) => {
+      setLocalJobId(jobId);
+      setLocalStatus("waiting");
+      // Descargar el .bat
+      window.open(`/api/agent/dvr-script?jobId=${jobId}`, "_blank");
+      // Iniciar polling cada 3 segundos
+      pollRef.current = setInterval(async () => {
+        const res = await pollJob();
+        if (res.data?.status === "done") {
+          clearInterval(pollRef.current!);
+          setLocalStatus("done");
+          setLocalResults((res.data.results as typeof localResults) ?? []);
+        } else if (res.data?.status === "error") {
+          clearInterval(pollRef.current!);
+          setLocalStatus("error");
+          setLocalError(res.data.error ?? "Error desconocido");
+        }
+      }, 3000);
+    },
+    onError: (e) => { setLocalStatus("error"); setLocalError(e.message); },
+  });
+
+  // Limpiar polling al desmontar
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  const recordings = searched
+    ? (result?.recordings ?? [])
+    : localStatus === "done" ? localResults : [];
+  const localIp  = result?.localIp ?? dvr?.localIp ?? null;
+  const dvrPort  = result?.port ?? dvr?.port ?? 80;
   const multiChannel = selectedChannels.size !== 1;
 
   function toggleChannel(ch: number) {
-    setSelectedChannels(prev => {
-      const n = new Set(prev);
-      n.has(ch) ? n.delete(ch) : n.add(ch);
-      return n;
+    setSelectedChannels(prev => { const n = new Set(prev); n.has(ch) ? n.delete(ch) : n.add(ch); return n; });
+  }
+  function toggleAll() {
+    setSelectedChannels(prev => prev.size === 0 || prev.size === channelCount ? new Set() : new Set(allChannels));
+  }
+
+  function handleSearch() { setSearched(true); setLocalStatus("idle"); refetch(); }
+
+  function handleSearchLocal() {
+    setSearched(false);
+    setLocalStatus("idle");
+    setLocalResults([]);
+    setLocalError(null);
+    setLocalJobId(null);
+    if (pollRef.current) clearInterval(pollRef.current);
+    createScanJob.mutate({
+      dvrId: id,
+      channels: Array.from(selectedChannels),
+      date, startTime, endTime,
     });
   }
-
-  function toggleAll() {
-    setSelectedChannels(prev =>
-      prev.size === 0 || prev.size === channelCount ? new Set() : new Set(allChannels)
-    );
-  }
-
-  function handleSearch() { setSearched(true); refetch(); }
 
   function handleDownloadRemote(filePath: string) {
     window.open(`/api/dvr/download?dvrId=${id}&filePath=${encodeURIComponent(filePath)}`, "_blank");
   }
-
   function handleDownloadLocal(filePath: string, ip: string) {
     window.open(`http://${ip}:${dvrPort}/RPC_Loadfile${filePath}`, "_blank");
   }
@@ -152,9 +190,17 @@ export default function DvrRecordingsPage() {
               className="bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
           </div>
           <button onClick={handleSearch} disabled={isFetching}
-            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-6 py-2 rounded-lg transition-colors">
-            {isFetching ? "Buscando…" : "Buscar"}
+            title="Busca desde el servidor — necesita IP pública del DVR"
+            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-5 py-2 rounded-lg transition-colors">
+            {isFetching ? "Buscando…" : "🌐 Buscar remoto"}
           </button>
+          {dvr?.localIp && (
+            <button onClick={handleSearchLocal} disabled={createScanJob.isPending || localStatus === "waiting"}
+              title="Descarga un agente que busca en la red local y envía los resultados"
+              className="bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white text-sm px-5 py-2 rounded-lg transition-colors">
+              {localStatus === "waiting" ? "⏳ Esperando agente…" : "🏠 Buscar local"}
+            </button>
+          )}
         </div>
 
         {/* Resumen de búsqueda */}
@@ -164,8 +210,19 @@ export default function DvrRecordingsPage() {
       </div>
 
       {/* Resultados */}
-      {searched && (
-        isFetching ? (
+      {(searched || localStatus !== "idle") && (
+        localStatus === "waiting" ? (
+          <div className="text-center py-12 text-slate-400">
+            <div className="text-4xl mb-3 animate-pulse">🏠</div>
+            <p className="text-white font-medium mb-1">Agente descargado — ejecútalo en tu PC</p>
+            <p className="text-slate-500 text-sm">Abre el archivo <code className="text-green-400">dvr-scan-{date}.bat</code> como Administrador</p>
+            <p className="text-slate-600 text-xs mt-2">Los resultados aparecerán aquí automáticamente cuando el agente termine…</p>
+          </div>
+        ) : localStatus === "error" ? (
+          <div className="bg-red-950 border border-red-800 rounded-xl p-4 text-red-300 text-sm">
+            ❌ Error del agente: {localError}
+          </div>
+        ) : isFetching ? (
           <div className="text-center py-12 text-slate-500">
             <div className="text-3xl mb-2">⏳</div>
             <p className="text-sm">Consultando {channelLabel}…</p>

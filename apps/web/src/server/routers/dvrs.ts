@@ -303,6 +303,54 @@ export const dvrsRouter = router({
         port:       dvr.port,
       };
     }),
+
+  // ── Crear job de scan local ──────────────────────────────────────────────────
+  createScanJob: protectedProcedure
+    .input(z.object({
+      dvrId:     z.string(),
+      channels:  z.array(z.number().int().min(1)),
+      date:      z.string(),
+      startTime: z.string().default("00:00"),
+      endTime:   z.string().default("23:59"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      const tenantId = ctx.session.user.tenantId;
+
+      const dvr = await prisma.dvr.findFirst({ where: { id: input.dvrId, tenantId } });
+      if (!dvr) throw new TRPCError({ code: "NOT_FOUND", message: "DVR no encontrado" });
+      if (!dvr.localIp) throw new TRPCError({ code: "BAD_REQUEST", message: "El DVR no tiene IP local configurada" });
+
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+      const job = await prisma.dvrScanJob.create({
+        data: {
+          tenantId,
+          dvrId:     input.dvrId,
+          channels:  input.channels,
+          date:      input.date,
+          startTime: input.startTime,
+          endTime:   input.endTime,
+          expiresAt,
+        },
+      });
+
+      return { jobId: job.id };
+    }),
+
+  // ── Consultar resultado de un job ────────────────────────────────────────────
+  getScanJob: protectedProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const job = await prisma.dvrScanJob.findFirst({
+        where: { id: input.jobId, tenantId: ctx.session.user.tenantId },
+      });
+      if (!job) throw new TRPCError({ code: "NOT_FOUND" });
+      return {
+        status:  job.status,
+        results: job.results as { channel: number; start: string; end: string; size: number; filePath: string }[] | null,
+        error:   job.error,
+      };
+    }),
 });
 
 // ─── Auto-detección de puerto ────────────────────────────────────────────────

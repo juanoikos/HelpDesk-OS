@@ -101,6 +101,24 @@ ALTER TABLE "dvrs" ADD COLUMN IF NOT EXISTS "localIp"   TEXT;
 ALTER TABLE "dvrs" ADD COLUMN IF NOT EXISTS "username"  TEXT;
 ALTER TABLE "dvrs" ADD COLUMN IF NOT EXISTS "password"  TEXT;
 
+CREATE TABLE IF NOT EXISTS "dvr_scan_jobs" (
+  "id"        TEXT         NOT NULL,
+  "tenantId"  TEXT         NOT NULL,
+  "dvrId"     TEXT         NOT NULL,
+  "channels"  JSONB        NOT NULL DEFAULT '[]',
+  "date"      TEXT         NOT NULL,
+  "startTime" TEXT         NOT NULL DEFAULT '00:00',
+  "endTime"   TEXT         NOT NULL DEFAULT '23:59',
+  "status"    TEXT         NOT NULL DEFAULT 'pending',
+  "results"   JSONB,
+  "error"     TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "expiresAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "dvr_scan_jobs_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "dvr_scan_jobs_tenantId_fkey"
+    FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS "ticket_attachments" (
   "id"        TEXT         NOT NULL,
   "ticketId"  TEXT         NOT NULL,

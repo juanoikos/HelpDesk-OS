@@ -33,6 +33,7 @@ model Tenant {
   networkDevices  NetworkDevice[]
   dvrs            Dvr[]
   dvrCredential   DvrCredential?
+  dvrScanJobs     DvrScanJob[]
 
   @@map("tenants")
 }
@@ -465,4 +466,25 @@ enum DvrStatus {
   ONLINE
   OFFLINE
   UNKNOWN
+}
+
+// ─── Trabajos de scan local de DVR ───────────────────────────────────────────
+
+model DvrScanJob {
+  id        String   @id @default(cuid())
+  tenantId  String
+  dvrId     String
+  channels  Json                        // int[]
+  date      String
+  startTime String   @default("00:00")
+  endTime   String   @default("23:59")
+  status    String   @default("pending") // pending | done | error
+  results   Json?                       // grabaciones encontradas
+  error     String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("dvr_scan_jobs")
 }
