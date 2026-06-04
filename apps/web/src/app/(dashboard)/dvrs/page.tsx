@@ -39,6 +39,7 @@ export default function DvrsPage() {
   // Form nuevo DVR
   const [newName,     setNewName]     = useState("");
   const [newIp,       setNewIp]       = useState("");
+  const [newLocalIp,  setNewLocalIp]  = useState("");
   const [newPort,     setNewPort]     = useState("80");
   const [newChannels, setNewChannels] = useState("8");
   const [newLocation, setNewLocation] = useState("");
@@ -49,7 +50,7 @@ export default function DvrsPage() {
 
   const saveCred  = trpc.dvrs.saveCredential.useMutation({ onSuccess: () => { utils.dvrs.getCredential.invalidate(); setCredOk(true); } });
   const createDvr = trpc.dvrs.create.useMutation({
-    onSuccess: () => { utils.dvrs.list.invalidate(); setShowAdd(false); setNewName(""); setNewIp(""); setNewPort("80"); setNewChannels("8"); setNewLocation(""); },
+    onSuccess: () => { utils.dvrs.list.invalidate(); setShowAdd(false); setNewName(""); setNewIp(""); setNewLocalIp(""); setNewPort("80"); setNewChannels("8"); setNewLocation(""); },
     onError:   (e) => alert(e.message),
   });
   const deleteDvr = trpc.dvrs.delete.useMutation({ onSuccess: () => utils.dvrs.list.invalidate(), onError: (e) => alert(e.message) });
@@ -279,8 +280,18 @@ export default function DvrsPage() {
             <div className="space-y-3">
               <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nombre (ej: Sede Norte — Bodega)"
                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-              <input value={newIp} onChange={e => setNewIp(e.target.value)} placeholder="IP (ej: 200.100.50.10)"
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-500 text-xs mb-1 block">🌐 IP Pública (acceso externo)</label>
+                  <input value={newIp} onChange={e => setNewIp(e.target.value)} placeholder="200.100.50.10"
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-slate-500 text-xs mb-1 block">🏠 IP Local (dentro de la red)</label>
+                  <input value={newLocalIp} onChange={e => setNewLocalIp(e.target.value)} placeholder="192.168.1.15"
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-slate-500 text-xs mb-1 block">Puerto</label>
@@ -304,8 +315,8 @@ export default function DvrsPage() {
             <div className="flex gap-2 justify-end">
               <button onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-white text-sm px-4 py-2">Cancelar</button>
               <button
-                onClick={() => createDvr.mutate({ name: newName, ip: newIp, port: parseInt(newPort) || 80, channels: parseInt(newChannels) || 8, location: newLocation || undefined })}
-                disabled={createDvr.isPending || !newName.trim() || !newIp.trim()}
+                onClick={() => createDvr.mutate({ name: newName, ip: newIp || newLocalIp, localIp: newLocalIp || undefined, port: parseInt(newPort) || 80, channels: parseInt(newChannels) || 8, location: newLocation || undefined })}
+                disabled={createDvr.isPending || !newName.trim() || (!newIp.trim() && !newLocalIp.trim())}
                 className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg">
                 {createDvr.isPending ? "Guardando…" : "Agregar"}
               </button>
@@ -380,7 +391,10 @@ export default function DvrsPage() {
                     <p className="text-white font-medium">{dvr.name}</p>
                     {dvr.location && <p className="text-slate-500 text-xs">{dvr.location}</p>}
                   </td>
-                  <td className="px-4 py-3 font-mono text-slate-300 text-xs">{dvr.ip}:{dvr.port}</td>
+                  <td className="px-4 py-3 text-xs">
+                    {dvr.ip && <div className="font-mono text-slate-300">🌐 {dvr.ip}:{dvr.port}</div>}
+                    {dvr.localIp && <div className="font-mono text-slate-500 mt-0.5">🏠 {dvr.localIp}:{dvr.port}</div>}
+                  </td>
                   <td className="px-4 py-3 text-slate-400 text-xs">{dvr.channels} ch</td>
                   <td className="px-4 py-3"><StatusBadge status={dvr.status} /></td>
                   <td className="px-4 py-3 text-slate-600 text-xs">

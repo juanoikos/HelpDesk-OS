@@ -70,6 +70,7 @@ export const dvrsRouter = router({
     .input(z.object({
       name:     z.string().min(1).max(100),
       ip:       z.string().min(1),
+      localIp:  z.string().optional(),
       port:     z.number().int().default(80),
       channels: z.number().int().refine(v => [4, 8, 16, 32].includes(v)).default(8),
       location: z.string().max(100).optional(),
@@ -87,6 +88,7 @@ export const dvrsRouter = router({
       id:       z.string(),
       name:     z.string().min(1).max(100).optional(),
       ip:       z.string().min(1).optional(),
+      localIp:  z.string().optional().nullable(),
       port:     z.number().int().optional(),
       channels: z.number().int().optional(),
       location: z.string().max(100).optional().nullable(),
@@ -268,7 +270,11 @@ export const dvrsRouter = router({
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `No se pudo conectar al DVR: ${String(e)}` });
       }
 
-      return allRecordings;
+      return {
+        recordings: allRecordings,
+        localIp:    dvr.localIp ?? null,
+        port:       dvr.port,
+      };
     }),
 });
 

@@ -33,18 +33,29 @@ export default function DvrRecordingsPage() {
   const [date,    setDate]    = useState(today);
   const [searched, setSearched] = useState(false);
 
-  const { data: recordings, isFetching, refetch, error } = trpc.dvrs.findRecordings.useQuery(
+  const { data: result, isFetching, refetch, error } = trpc.dvrs.findRecordings.useQuery(
     { dvrId: id, channel, date },
     { enabled: false }
   );
+
+  const recordings = result?.recordings ?? [];
+  const localIp    = result?.localIp ?? null;
+  const dvrPort    = result?.port ?? 80;
 
   function handleSearch() {
     setSearched(true);
     refetch();
   }
 
-  function handleDownload(filePath: string) {
+  // Descarga remota — pasa por Railway (necesita IP pública)
+  function handleDownloadRemote(filePath: string) {
     const url = `/api/dvr/download?dvrId=${id}&filePath=${encodeURIComponent(filePath)}`;
+    window.open(url, "_blank");
+  }
+
+  // Descarga local — el browser va directo al DVR (solo funciona en la misma red)
+  function handleDownloadLocal(filePath: string, ip: string) {
+    const url = `http://${ip}:${dvrPort}/RPC_Loadfile${filePath}`;
     window.open(url, "_blank");
   }
 
@@ -146,10 +157,20 @@ export default function DvrRecordingsPage() {
                           {rec.filePath.split("/").pop()}
                         </td>
                         <td className="px-4 py-3">
-                          <button onClick={() => handleDownload(rec.filePath)}
-                            className="flex items-center gap-1.5 bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
-                            ⬇ MP4
-                          </button>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {localIp && (
+                              <button onClick={() => handleDownloadLocal(rec.filePath, localIp)}
+                                title="Descarga directa — solo funciona dentro de la red local"
+                                className="flex items-center gap-1 bg-green-800 hover:bg-green-700 text-white text-xs px-2.5 py-1.5 rounded-lg transition-colors">
+                                🏠 Local
+                              </button>
+                            )}
+                            <button onClick={() => handleDownloadRemote(rec.filePath)}
+                              title="Descarga vía servidor — funciona desde cualquier lugar"
+                              className="flex items-center gap-1 bg-blue-700 hover:bg-blue-600 text-white text-xs px-2.5 py-1.5 rounded-lg transition-colors">
+                              🌐 Remoto
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
