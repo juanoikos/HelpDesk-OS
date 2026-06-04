@@ -34,6 +34,8 @@ model Tenant {
   dvrs            Dvr[]
   dvrCredential   DvrCredential?
   dvrScanJobs     DvrScanJob[]
+  monitorTargets  MonitorTarget[]
+  monitorChecks   MonitorCheck[]
 
   @@map("tenants")
 }
@@ -422,6 +424,59 @@ model NetworkDevice {
 
   @@unique([tenantId, ip])
   @@map("network_devices")
+}
+
+// ─── Monitor (Zabbix-style LAN/WAN monitoring) ───────────────────────────────
+
+model MonitorTarget {
+  id          String    @id @default(cuid())
+  tenantId    String
+  name        String
+  host        String           // IP o dominio a monitorear
+  checkType   String           // "http" | "https" | "tcp" | "ping"
+  port        Int?             // override; sino usa default según checkType
+  httpPath    String    @default("/")
+  interval    Int       @default(60)    // segundos entre checks
+  timeout     Int       @default(5000)  // ms de timeout por check
+  retries     Int       @default(2)     // reintentos antes de marcar "down"
+  enabled     Boolean   @default(true)
+  networkType String    @default("wan") // "lan" | "wan"
+  agentHost   String?                   // para lan: hostname del agente que lo chequea
+
+  // Estado actual (desnormalizado para lectura rápida)
+  status      String    @default("unknown") // "up" | "down" | "timeout" | "unknown"
+  lastChecked DateTime?
+  lastLatency Int?      // ms
+  lastError   String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant  Tenant         @relation(fields: [tenantId], references: [id])
+  checks  MonitorCheck[]
+
+  @@index([tenantId])
+  @@index([tenantId, networkType])
+  @@map("monitor_targets")
+}
+
+model MonitorCheck {
+  id         String   @id @default(cuid())
+  tenantId   String
+  targetId   String
+  status     String   // "up" | "down" | "timeout"
+  latency    Int?     // ms; null si no hubo respuesta
+  httpStatus Int?     // código HTTP si aplica
+  error      String?
+  checkedAt  DateTime @default(now())
+  checkedBy  String   @default("server") // "server" o hostname del agente LAN
+
+  tenant  Tenant        @relation(fields: [tenantId], references: [id])
+  target  MonitorTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([targetId, checkedAt(sort: Desc)])
+  @@index([tenantId, checkedAt(sort: Desc)])
+  @@map("monitor_checks")
 }
 
 // ─── DVRs / NVRs ─────────────────────────────────────────────────────────────

@@ -13,13 +13,36 @@ function requireAdmin(role: string) {
 }
 
 export const networkDevicesRouter = router({
+  // ── Listar scans únicos (por scanId) para el selector de sede ─────────────
+  listScans: protectedProcedure.query(async ({ ctx }) => {
+    const tenantId = ctx.session.user.tenantId;
+
+    const scans = await prisma.networkDevice.groupBy({
+      by: ["scanId", "scannedFrom", "subnet"],
+      where: { tenantId },
+      _count: { id: true },
+      _max:   { lastSeenAt: true },
+      orderBy: { _max: { lastSeenAt: "desc" } },
+    });
+
+    return scans.map((s) => ({
+      scanId:      s.scanId,
+      scannedFrom: s.scannedFrom,
+      subnet:      s.subnet,
+      deviceCount: s._count.id,
+      lastSeenAt:  s._max.lastSeenAt,
+    }));
+  }),
+
   // ── Listar todos los dispositivos del tenant (con cruce a Activos) ──────────
-  list: protectedProcedure.query(async ({ ctx }) => {
+  list: protectedProcedure
+    .input(z.object({ scanId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
     const tenantId = ctx.session.user.tenantId;
 
     const [devices, assets] = await Promise.all([
       prisma.networkDevice.findMany({
-        where:   { tenantId },
+        where:   { tenantId, ...(input?.scanId ? { scanId: input.scanId } : {}) },
         orderBy: [{ deviceType: "asc" }, { ip: "asc" }],
       }),
       prisma.asset.findMany({

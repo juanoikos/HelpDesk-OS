@@ -168,6 +168,56 @@ CREATE TABLE IF NOT EXISTS "network_devices" (
   CONSTRAINT "network_devices_tenantId_fkey"
     FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS "monitor_targets" (
+  "id"          TEXT         NOT NULL,
+  "tenantId"    TEXT         NOT NULL,
+  "name"        TEXT         NOT NULL,
+  "host"        TEXT         NOT NULL,
+  "checkType"   TEXT         NOT NULL DEFAULT 'http',
+  "port"        INTEGER,
+  "httpPath"    TEXT         NOT NULL DEFAULT '/',
+  "interval"    INTEGER      NOT NULL DEFAULT 60,
+  "timeout"     INTEGER      NOT NULL DEFAULT 5000,
+  "retries"     INTEGER      NOT NULL DEFAULT 2,
+  "enabled"     BOOLEAN      NOT NULL DEFAULT true,
+  "networkType" TEXT         NOT NULL DEFAULT 'wan',
+  "agentHost"   TEXT,
+  "status"      TEXT         NOT NULL DEFAULT 'unknown',
+  "lastChecked" TIMESTAMP(3),
+  "lastLatency" INTEGER,
+  "lastError"   TEXT,
+  "createdAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "monitor_targets_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "monitor_targets_tenantId_fkey"
+    FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE INDEX IF NOT EXISTS "monitor_targets_tenantId_idx"
+  ON "monitor_targets"("tenantId");
+CREATE INDEX IF NOT EXISTS "monitor_targets_tenantId_networkType_idx"
+  ON "monitor_targets"("tenantId", "networkType");
+
+CREATE TABLE IF NOT EXISTS "monitor_checks" (
+  "id"         TEXT         NOT NULL,
+  "tenantId"   TEXT         NOT NULL,
+  "targetId"   TEXT         NOT NULL,
+  "status"     TEXT         NOT NULL,
+  "latency"    INTEGER,
+  "httpStatus" INTEGER,
+  "error"      TEXT,
+  "checkedAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "checkedBy"  TEXT         NOT NULL DEFAULT 'server',
+  CONSTRAINT "monitor_checks_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "monitor_checks_tenantId_fkey"
+    FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "monitor_checks_targetId_fkey"
+    FOREIGN KEY ("targetId") REFERENCES "monitor_targets"("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE INDEX IF NOT EXISTS "monitor_checks_targetId_checkedAt_idx"
+  ON "monitor_checks"("targetId", "checkedAt" DESC);
+CREATE INDEX IF NOT EXISTS "monitor_checks_tenantId_checkedAt_idx"
+  ON "monitor_checks"("tenantId", "checkedAt" DESC);
 SQL
 
 echo "▶ Iniciando HelpDesk OS..."

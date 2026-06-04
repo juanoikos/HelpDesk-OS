@@ -8,5 +8,8 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { startImapPolling } = await import("./lib/imap-poller");
     startImapPolling();
+
+    const { startWanMonitor } = await import("./lib/wan-monitor");
+    startWanMonitor();
   }
 }

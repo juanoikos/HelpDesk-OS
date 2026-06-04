@@ -8,6 +8,7 @@ import { reportsRouter } from "./reports";
 import { assetsRouter } from "./assets";
 import { networkDevicesRouter } from "./networkDevices";
 import { dvrsRouter } from "./dvrs";
+import { monitoringRouter } from "./monitoring";
 
 export const appRouter = router({
   wizard:          wizardRouter,
@@ -19,6 +20,7 @@ export const appRouter = router({
   assets:          assetsRouter,
   networkDevices:  networkDevicesRouter,
   dvrs:            dvrsRouter,
+  monitoring:      monitoringRouter,
 });
 
 export type AppRouter = typeof appRouter;
