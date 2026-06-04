@@ -363,9 +363,8 @@ function TargetFormModal({
 export default function MonitoringPage() {
   const utils = trpc.useUtils();
 
-  const targetsQ    = trpc.monitoring.listTargets.useQuery(undefined, { refetchInterval: 15_000 });
-  const agentsQ     = trpc.monitoring.listAgents.useQuery();
-  const agentTokenQ = trpc.assets.getAgentToken.useQuery();
+  const targetsQ = trpc.monitoring.listTargets.useQuery(undefined, { refetchInterval: 15_000 });
+  const agentsQ  = trpc.monitoring.listAgents.useQuery();
 
   const createMut = trpc.monitoring.createTarget.useMutation({
     onSuccess: () => { utils.monitoring.listTargets.invalidate(); setShowForm(false); },
@@ -453,7 +452,7 @@ export default function MonitoringPage() {
         </div>
         <div className="flex items-center gap-2">
           <a
-            href={`/api/agent/monitor-agent${agentTokenQ.data?.agentToken ? `?token=${agentTokenQ.data.agentToken}` : ""}`}
+            href="/api/agent/monitor-agent"
             download="helpdesk-monitor.ps1"
             className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5"
           >

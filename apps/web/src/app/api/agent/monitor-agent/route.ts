@@ -1,28 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { prisma } from "@helpdesk-os/db";
+import { randomUUID } from "crypto";
 
-// GET /api/agent/monitor-agent  → descarga helpdesk-monitor.bat
-// El .bat extrae y ejecuta un script PowerShell que corre en bucle continuo
-// haciendo checks de todos los targets LAN asignados al agente.
+// GET /api/agent/monitor-agent  → descarga helpdesk-monitor.ps1
+// Igual que el scanner: usa sesión del navegador para embeber el token.
 
 export async function GET(req: NextRequest) {
   let token = "";
 
-  // Acepta el token por Bearer header O por query param ?token=xxx
-  const auth = req.headers.get("authorization");
-  const queryToken = req.nextUrl.searchParams.get("token");
-
-  const rawToken = (auth?.startsWith("Bearer ") ? auth.slice(7) : null) ?? queryToken ?? "";
-
-  if (rawToken) {
-    const settings = await prisma.tenantSettings.findFirst({ where: { agentToken: rawToken } });
-    if (settings) {
-      token = rawToken; // token válido → se embebe en el script
+  // ── Modo Bearer: llamado desde el propio agente (ya tiene token) ────────────
+  const authHeader = req.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const t = authHeader.slice(7);
+    const s = await prisma.tenantSettings.findFirst({ where: { agentToken: t } });
+    if (!s) return NextResponse.json({ error: "Token inválido" }, { status: 401 });
+    token = t;
+  } else {
+    // ── Modo descarga: navegador autenticado → usamos sesión ─────────────────
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
-    // token inválido → el script pedirá el token al usuario (no bloqueamos la descarga)
+    const tenantId = session.user.tenantId;
+
+    // Si no tiene token aún lo generamos automáticamente (igual que el scanner)
+    let settings = await prisma.tenantSettings.findUnique({ where: { tenantId } });
+    if (!settings?.agentToken) {
+      settings = await prisma.tenantSettings.upsert({
+        where:  { tenantId },
+        create: { tenantId, agentToken: randomUUID() },
+        update: { agentToken: randomUUID() },
+      });
+    }
+    token = settings.agentToken!;
   }
 
-  const serverUrl = req.nextUrl.origin;
+  const serverUrl = process.env.AUTH_URL ?? req.nextUrl.origin;
 
   const PS_SCRIPT = `
 # HelpDesk OS — Monitor Agent LAN
