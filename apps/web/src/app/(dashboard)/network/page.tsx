@@ -368,6 +368,12 @@ export default function NetworkPage() {
                         >
                           ↗
                         </a>
+                        {(device.deviceType === "dvr_nvr" || device.deviceType === "ip_camera") && (
+                          <a href="/dvrs" title="Agregar a DVRs"
+                            className="text-slate-500 hover:text-orange-400 transition-colors text-xs">
+                            📹
+                          </a>
+                        )}
                         <button
                           onClick={() => {
                             if (confirm(`¿Eliminar ${device.ip} del inventario?`)) {

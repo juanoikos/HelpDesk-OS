@@ -110,6 +110,36 @@ export const dvrsRouter = router({
       });
     }),
 
+  // ── Dispositivos de red candidatos a DVR (para importar desde scan) ─────────
+  networkCandidates: protectedProcedure.query(async ({ ctx }) => {
+    requireAdmin(ctx.session.user.role);
+    const tenantId = ctx.session.user.tenantId;
+
+    const [devices, existingDvrs] = await Promise.all([
+      prisma.networkDevice.findMany({
+        where: {
+          tenantId,
+          deviceType: { in: ["dvr_nvr", "ip_camera", "unknown", "web_device"] },
+        },
+        orderBy: { ip: "asc" },
+      }),
+      prisma.dvr.findMany({ where: { tenantId }, select: { ip: true } }),
+    ]);
+
+    const existingIPs = new Set(existingDvrs.map(d => d.ip));
+
+    return devices.map(d => ({
+      id:         d.id,
+      ip:         d.ip,
+      hostname:   d.hostname,
+      vendor:     d.vendor,
+      deviceType: d.deviceType,
+      openPorts:  d.openPorts as number[] | null,
+      lastSeenAt: d.lastSeenAt,
+      alreadyAdded: existingIPs.has(d.ip),
+    }));
+  }),
+
   // ── Importación masiva por CSV/JSON ─────────────────────────────────────────
   bulkImport: protectedProcedure
     .input(z.array(z.object({

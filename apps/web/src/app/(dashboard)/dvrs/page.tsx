@@ -16,13 +16,17 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function DvrsPage() {
   const utils = trpc.useUtils();
-  const { data: dvrs,  isLoading } = trpc.dvrs.list.useQuery();
-  const { data: cred }             = trpc.dvrs.getCredential.useQuery();
+  const { data: dvrs,      isLoading }     = trpc.dvrs.list.useQuery();
+  const { data: cred }                     = trpc.dvrs.getCredential.useQuery();
+  const { data: netCandidates, isLoading: loadingNet } = trpc.dvrs.networkCandidates.useQuery();
 
   // Estado modales
-  const [showCred,   setShowCred]   = useState(false);
-  const [showAdd,    setShowAdd]    = useState(false);
-  const [showImport, setShowImport] = useState(false);
+  const [showCred,      setShowCred]      = useState(false);
+  const [showAdd,       setShowAdd]       = useState(false);
+  const [showImport,    setShowImport]    = useState(false);
+  const [showFromNet,   setShowFromNet]   = useState(false);
+  const [netSelected,   setNetSelected]   = useState<Set<string>>(new Set());
+  const [netNames,      setNetNames]      = useState<Record<string, string>>({});
   const [editDvr,    setEditDvr]    = useState<string | null>(null);
   const [search,     setSearch]     = useState("");
   const [checkingAll, setCheckingAll] = useState(false);
@@ -103,6 +107,10 @@ export default function DvrsPage() {
             className="text-sm px-3 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors disabled:opacity-50">
             {checkingAll ? "Verificando…" : "⚡ Verificar todos"}
           </button>
+          <button onClick={() => { setShowFromNet(true); setNetSelected(new Set()); setNetNames({}); }}
+            className="text-sm px-3 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors">
+            🔍 Importar desde Red
+          </button>
           <button onClick={() => setShowImport(true)}
             className="text-sm px-3 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors">
             📥 Importar CSV
@@ -128,6 +136,115 @@ export default function DvrsPage() {
           </div>
         ))}
       </div>
+
+      {/* Modal: importar desde scan de Red */}
+      {showFromNet && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-2xl space-y-4 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-white font-semibold text-lg">🔍 Importar desde scan de Red</h2>
+                <p className="text-slate-500 text-xs mt-0.5">Selecciona los dispositivos del último scan que quieres registrar como DVR</p>
+              </div>
+              <button onClick={() => setShowFromNet(false)} className="text-slate-500 hover:text-white text-xl">✕</button>
+            </div>
+
+            {loadingNet ? (
+              <p className="text-slate-500 text-sm py-6 text-center">Cargando dispositivos…</p>
+            ) : !netCandidates?.length ? (
+              <div className="text-center py-8 text-slate-600">
+                <p className="text-sm">No hay dispositivos en el scan de Red.</p>
+                <p className="text-xs mt-1">Ejecuta primero el scanner desde la página <a href="/network" className="text-blue-400">Red</a>.</p>
+              </div>
+            ) : (
+              <div className="overflow-y-auto flex-1 space-y-2 pr-1">
+                {netCandidates.map(d => {
+                  const sel = netSelected.has(d.ip);
+                  return (
+                    <div key={d.ip}
+                      onClick={() => {
+                        if (d.alreadyAdded) return;
+                        setNetSelected(prev => {
+                          const n = new Set(prev);
+                          sel ? n.delete(d.ip) : n.add(d.ip);
+                          return n;
+                        });
+                      }}
+                      className={`flex items-center gap-4 p-3 rounded-xl border transition-colors cursor-pointer
+                        ${d.alreadyAdded ? "border-slate-800 opacity-40 cursor-not-allowed" :
+                          sel ? "border-blue-600 bg-blue-900/20" : "border-slate-800 hover:border-slate-600"}`}
+                    >
+                      {/* Checkbox */}
+                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors
+                        ${d.alreadyAdded ? "border-slate-600" : sel ? "border-blue-500 bg-blue-500" : "border-slate-600"}`}>
+                        {sel && <span className="text-white text-[10px]">✓</span>}
+                        {d.alreadyAdded && <span className="text-slate-500 text-[10px]">✓</span>}
+                      </div>
+
+                      {/* Info dispositivo */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-white text-sm font-medium">{d.ip}</span>
+                          {d.hostname && <span className="text-slate-500 text-xs truncate">{d.hostname}</span>}
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+                            ${d.deviceType === "dvr_nvr" ? "bg-orange-900/60 text-orange-300 border border-orange-800" :
+                              d.deviceType === "ip_camera" ? "bg-purple-900/60 text-purple-300 border border-purple-800" :
+                              "bg-slate-800 text-slate-400 border border-slate-700"}`}>
+                            {d.deviceType === "dvr_nvr" ? "DVR/NVR" : d.deviceType === "ip_camera" ? "Cámara IP" : d.deviceType}
+                          </span>
+                          {d.alreadyAdded && <span className="text-xs text-green-500">ya registrado</span>}
+                        </div>
+                        {d.vendor && <p className="text-slate-500 text-xs mt-0.5">{d.vendor}</p>}
+                      </div>
+
+                      {/* Nombre editable si está seleccionado */}
+                      {sel && (
+                        <input
+                          value={netNames[d.ip] ?? ""}
+                          onChange={e => { e.stopPropagation(); setNetNames(prev => ({ ...prev, [d.ip]: e.target.value })); }}
+                          onClick={e => e.stopPropagation()}
+                          placeholder={`Nombre (ej: ${d.hostname ?? d.ip})`}
+                          className="bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-blue-500 w-48 shrink-0"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+              <span className="text-slate-500 text-xs">{netSelected.size} seleccionado{netSelected.size !== 1 ? "s" : ""}</span>
+              <div className="flex gap-2">
+                <button onClick={() => setShowFromNet(false)} className="text-slate-400 hover:text-white text-sm px-4 py-2">Cancelar</button>
+                <button
+                  disabled={netSelected.size === 0 || bulkImport.isPending}
+                  onClick={() => {
+                    const rows = Array.from(netSelected).map(ip => {
+                      const d = netCandidates?.find(c => c.ip === ip)!;
+                      return {
+                        name:     netNames[ip]?.trim() || d.hostname || ip,
+                        ip,
+                        port:     80,
+                        channels: 8,
+                      };
+                    });
+                    bulkImport.mutate(rows, {
+                      onSuccess: (r) => {
+                        utils.dvrs.list.invalidate();
+                        setShowFromNet(false);
+                        alert(`✅ Importados: ${r.created} | Ya existían: ${r.skipped}`);
+                      },
+                    });
+                  }}
+                  className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition-colors">
+                  {bulkImport.isPending ? "Importando…" : `Importar ${netSelected.size}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal: credencial */}
       {showCred && (
