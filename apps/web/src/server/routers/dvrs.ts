@@ -213,10 +213,11 @@ export const dvrsRouter = router({
   }),
 
   // ── Buscar grabaciones en un DVR (Dahua HTTP API) ───────────────────────────
+  // channel = 0 → todas las cámaras
   findRecordings: protectedProcedure
     .input(z.object({
       dvrId:   z.string(),
-      channel: z.number().int().min(1),
+      channel: z.number().int().min(0), // 0 = todas
       date:    z.string(), // "YYYY-MM-DD"
     }))
     .query(async ({ input, ctx }) => {
@@ -230,35 +231,44 @@ export const dvrsRouter = router({
       if (!dvr)  throw new TRPCError({ code: "NOT_FOUND", message: "DVR no encontrado" });
       if (!cred) throw new TRPCError({ code: "BAD_REQUEST", message: "Configura las credenciales primero" });
 
-      const password = decrypt(cred.password);
-      const base     = `http://${dvr.ip}:${dvr.port}`;
-      const start    = `${input.date} 00:00:00`;
-      const end      = `${input.date} 23:59:59`;
+      const password    = decrypt(cred.password);
+      const base        = `http://${dvr.ip}:${dvr.port}`;
+      const start       = `${input.date} 00:00:00`;
+      const end         = `${input.date} 23:59:59`;
+      const authHeader  = buildDigestAuth(cred.username, password);
 
-      // Dahua mediaFileFind CGI
-      const authHeader = buildDigestAuth(cred.username, password);
-      const url = `${base}/cgi-bin/mediaFileFind.cgi?action=findFile&object=0&condition.Channel=${input.channel}&condition.StartTime=${encodeURIComponent(start)}&condition.EndTime=${encodeURIComponent(end)}&condition.Flags[0]=General`;
+      // Canales a consultar: 0 = todos, n = uno específico
+      const channels = input.channel === 0
+        ? Array.from({ length: dvr.channels }, (_, i) => i + 1)
+        : [input.channel];
 
-      let recordings: { start: string; end: string; size: number; filePath: string }[] = [];
-      try {
-        const ctrl = new AbortController();
-        const t    = setTimeout(() => ctrl.abort(), 8000);
-        const res  = await fetch(url, {
-          signal:  ctrl.signal,
-          headers: { Authorization: authHeader },
-        });
-        clearTimeout(t);
-
-        if (res.ok) {
+      async function fetchChannel(ch: number) {
+        const url = `${base}/cgi-bin/mediaFileFind.cgi?action=findFile&object=0&condition.Channel=${ch}&condition.StartTime=${encodeURIComponent(start)}&condition.EndTime=${encodeURIComponent(end)}&condition.Flags[0]=General`;
+        try {
+          const ctrl = new AbortController();
+          const t    = setTimeout(() => ctrl.abort(), 8000);
+          const res  = await fetch(url, { signal: ctrl.signal, headers: { Authorization: authHeader } });
+          clearTimeout(t);
+          if (!res.ok) return [];
           const text = await res.text();
-          // Parsear respuesta Dahua (formato key=value por línea)
-          recordings = parseDahuaFileFind(text, base, input.channel);
+          return parseDahuaFileFind(text, base, ch);
+        } catch {
+          return [];
         }
+      }
+
+      // Consultar todos los canales en paralelo
+      let allRecordings: { channel: number; start: string; end: string; size: number; filePath: string }[] = [];
+      try {
+        const results = await Promise.all(channels.map(ch => fetchChannel(ch)));
+        allRecordings = results.flatMap((recs, i) =>
+          recs.map(r => ({ channel: channels[i]!, ...r }))
+        );
       } catch (e) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `No se pudo conectar al DVR: ${String(e)}` });
       }
 
-      return recordings;
+      return allRecordings;
     }),
 });
 
@@ -297,13 +307,6 @@ function buildDigestAuth(username: string, password: string): string {
 }
 
 function parseDahuaFileFind(text: string, baseUrl: string, channel: number) {
-  // La respuesta Dahua viene en formato:
-  // found=N
-  // items[0].FilePath=/mnt/dvr/...
-  // items[0].StartTime=2024/01/01 08:00:00
-  // items[0].EndTime=2024/01/01 09:00:00
-  // items[0].Length=123456789
-
   const recordings: { start: string; end: string; size: number; filePath: string }[] = [];
   const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
 
@@ -319,9 +322,7 @@ function parseDahuaFileFind(text: string, baseUrl: string, channel: number) {
     const end      = get("EndTime").replace(/\//g, "-");
     const size     = parseInt(get("Length") ?? "0");
 
-    if (filePath) {
-      recordings.push({ start, end, size, filePath });
-    }
+    if (filePath) recordings.push({ start, end, size, filePath });
   }
   return recordings;
 }

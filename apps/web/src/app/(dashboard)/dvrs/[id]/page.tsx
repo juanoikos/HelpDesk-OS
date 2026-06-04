@@ -75,6 +75,7 @@ export default function DvrRecordingsPage() {
             <label className="text-slate-500 text-xs block mb-1">Canal</label>
             <select value={channel} onChange={e => setChannel(parseInt(e.target.value))}
               className="bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+              <option value={0}>📹 Todas las cámaras</option>
               {Array.from({ length: channelCount }, (_, i) => i + 1).map(ch => (
                 <option key={ch} value={ch}>Cámara {ch}</option>
               ))}
@@ -112,12 +113,13 @@ export default function DvrRecordingsPage() {
           ) : (
             <div>
               <p className="text-slate-400 text-sm mb-3">
-                {recordings.length} grabación{recordings.length !== 1 ? "es" : ""} encontrada{recordings.length !== 1 ? "s" : ""} · Cámara {channel} · {date}
+                {recordings.length} grabación{recordings.length !== 1 ? "es" : ""} encontrada{recordings.length !== 1 ? "s" : ""} · {channel === 0 ? "Todas las cámaras" : `Cámara ${channel}`} · {date}
               </p>
               <div className="rounded-xl border border-slate-800 overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-800/50 border-b border-slate-800">
+                      {channel === 0 && <th className="text-left text-slate-400 font-medium px-4 py-3">Cámara</th>}
                       <th className="text-left text-slate-400 font-medium px-4 py-3">Inicio</th>
                       <th className="text-left text-slate-400 font-medium px-4 py-3">Fin</th>
                       <th className="text-left text-slate-400 font-medium px-4 py-3">Duración</th>
@@ -129,6 +131,13 @@ export default function DvrRecordingsPage() {
                   <tbody className="divide-y divide-slate-800">
                     {recordings.map((rec, i) => (
                       <tr key={i} className="hover:bg-slate-800/30 transition-colors">
+                        {channel === 0 && (
+                          <td className="px-4 py-3">
+                            <span className="text-xs font-medium text-blue-400 bg-blue-900/30 border border-blue-800 px-2 py-0.5 rounded-full">
+                              Cam {"channel" in rec ? (rec as { channel: number }).channel : "?"}
+                            </span>
+                          </td>
+                        )}
                         <td className="px-4 py-3 text-white font-mono text-xs">{rec.start.split(" ")[1] ?? rec.start}</td>
                         <td className="px-4 py-3 text-slate-400 font-mono text-xs">{rec.end.split(" ")[1] ?? rec.end}</td>
                         <td className="px-4 py-3 text-slate-400 text-xs">{formatDuration(rec.start, rec.end)}</td>
