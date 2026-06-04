@@ -27,7 +27,8 @@ export async function GET(req: NextRequest) {
   if (!job) return NextResponse.json({ error: "Job no encontrado" }, { status: 404 });
 
   const dvr = await prisma.dvr.findFirst({ where: { id: job.dvrId, tenantId } });
-  if (!dvr?.localIp) return NextResponse.json({ error: "DVR sin IP local" }, { status: 400 });
+  const dvrLocalIp = dvr?.localIp ?? dvr?.ip ?? null;
+  if (!dvrLocalIp) return NextResponse.json({ error: "DVR sin IP local" }, { status: 400 });
 
   let username = "admin";
   let password = "";
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest) {
     : ("@(" + channels.join(",") + ")");
 
   const ps1 = buildPs1(
-    dvr.localIp, dvr.port, username, password,
+    dvrLocalIp, dvr.port, username, password,
     channelsPs, job.date, job.startTime, job.endTime,
     jobId, appUrl, agentToken
   );
@@ -66,7 +67,7 @@ export async function GET(req: NextRequest) {
     "echo  ==============================================",
     "echo   HelpDesk OS - Buscando grabaciones en DVR",
     "echo  ==============================================",
-    "echo   DVR: " + dvr.localIp + ":" + dvr.port,
+    "echo   DVR: " + dvrLocalIp + ":" + dvr.port,
     "echo   Fecha: " + job.date + "  " + job.startTime + " - " + job.endTime,
     "echo  ==============================================",
     "echo.",

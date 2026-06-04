@@ -303,7 +303,7 @@ export const dvrsRouter = router({
 
       return {
         recordings: allRecordings,
-        localIp:    dvr.localIp ?? null,
+        localIp:    dvr.localIp ?? dvr.ip ?? null,
         port:       dvr.port,
       };
     }),
@@ -323,7 +323,7 @@ export const dvrsRouter = router({
 
       const dvr = await prisma.dvr.findFirst({ where: { id: input.dvrId, tenantId } });
       if (!dvr) throw new TRPCError({ code: "NOT_FOUND", message: "DVR no encontrado" });
-      if (!dvr.localIp) throw new TRPCError({ code: "BAD_REQUEST", message: "El DVR no tiene IP local configurada" });
+      if (!dvr.localIp && !dvr.ip) throw new TRPCError({ code: "BAD_REQUEST", message: "El DVR no tiene IP local configurada" });
 
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
       const job = await prisma.dvrScanJob.create({
