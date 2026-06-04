@@ -20,7 +20,12 @@ export async function POST(req: NextRequest) {
     where: { id: body.jobId, tenantId: settings.tenantId },
   });
   if (!job) return NextResponse.json({ error: "Job no encontrado" }, { status: 404 });
-  if (job.status !== "pending") return NextResponse.json({ error: "Job ya procesado" }, { status: 409 });
+  // Permitir reenvío si estaba done con 0 resultados (reintento tras error de auth) o en error
+  const isDoneEmpty = job.status === "done" && Array.isArray(job.results) && (job.results as unknown[]).length === 0;
+  const isError     = job.status === "error";
+  if (job.status !== "pending" && !isDoneEmpty && !isError) {
+    return NextResponse.json({ error: "Job ya procesado con resultados" }, { status: 409 });
+  }
 
   if (body.error) {
     await prisma.dvrScanJob.update({
