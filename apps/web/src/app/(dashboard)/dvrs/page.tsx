@@ -429,6 +429,38 @@ export default function DvrsPage() {
         </div>
       )}
 
+      {/* Panel agente C# */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 mb-6">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h2 className="text-white font-semibold mb-1">🖥️ Agente Dahua (búsqueda local)</h2>
+            <p className="text-slate-400 text-sm">
+              Instala el agente en tu PC Windows para buscar grabaciones en DVRs de tu red local.
+            </p>
+          </div>
+          <a href="/api/agent/dahua-config" download="config.json"
+            className="shrink-0 bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+            ⬇ Descargar config.json
+          </a>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3 text-xs">
+          <div className="bg-slate-800 rounded-xl p-3 space-y-1">
+            <p className="text-slate-300 font-medium">1. Instalar .NET 8</p>
+            <p className="text-slate-500">dotnet.microsoft.com/download</p>
+          </div>
+          <div className="bg-slate-800 rounded-xl p-3 space-y-1">
+            <p className="text-slate-300 font-medium">2. Compilar el agente</p>
+            <code className="text-green-400 text-xs block">cd apps/dahua-agent</code>
+            <code className="text-green-400 text-xs block">dotnet build -c Release</code>
+          </div>
+          <div className="bg-slate-800 rounded-xl p-3 space-y-1">
+            <p className="text-slate-300 font-medium">3. Configurar y ejecutar</p>
+            <p className="text-slate-500">Pon el config.json junto al .exe y ejecuta</p>
+            <code className="text-green-400 text-xs block">DahuaAgent.exe</code>
+          </div>
+        </div>
+      </div>
+
       {/* Búsqueda */}
       <div className="relative mb-4">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">🔍</span>
