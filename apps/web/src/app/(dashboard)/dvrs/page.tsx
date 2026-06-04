@@ -1,7 +1,7 @@
 "use client";
 
 import { trpc } from "@/trpc/react";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -48,6 +48,49 @@ export default function DvrsPage() {
   const [useOwnCred,   setUseOwnCred]   = useState(false);
   const [newUsername,  setNewUsername]  = useState("admin");
   const [newPassword,  setNewPassword]  = useState("");
+
+  // QR scanner
+  const [showQR,      setShowQR]      = useState(false);
+  const qrScannerRef  = useRef<{ stop: () => Promise<void> } | null>(null);
+  const QR_DIV_ID     = "dvr-qr-reader";
+
+  function extractSerial(raw: string): string {
+    let s = raw.trim();
+    if (s.startsWith("sn://"))  s = s.slice(5);
+    else if (s.includes("://")) s = s.split("://")[1] ?? s;
+    return s.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  }
+
+  async function startQrScanner() {
+    setShowQR(true);
+    await new Promise(r => setTimeout(r, 300));
+    try {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      const scanner = new Html5Qrcode(QR_DIV_ID);
+      qrScannerRef.current = scanner;
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 260, height: 260 } },
+        (text) => { setNewSerial(extractSerial(text)); stopQrScanner(); },
+        () => {}
+      );
+    } catch (err) {
+      console.error("QR scanner error:", err);
+      stopQrScanner();
+      alert("No se pudo acceder a la cámara. Ingresa el serial manualmente.");
+    }
+  }
+
+  async function stopQrScanner() {
+    try { await qrScannerRef.current?.stop(); } catch { /* ignore */ }
+    qrScannerRef.current = null;
+    setShowQR(false);
+  }
+
+  // Limpiar scanner si se cierra el modal de agregar DVR
+  useEffect(() => {
+    if (!showAdd && qrScannerRef.current) stopQrScanner();
+  }, [showAdd]);
 
   // Import CSV
   const fileRef = useRef<HTMLInputElement>(null);
@@ -308,8 +351,15 @@ export default function DvrsPage() {
                 <p className="text-xs font-medium text-blue-400">🌐 Acceso remoto (fuera de la red)</p>
                 <div>
                   <label className="text-slate-500 text-xs mb-1 block">Número de serie (Serial)</label>
-                  <input value={newSerial} onChange={e => setNewSerial(e.target.value)} placeholder="ej: 3F06C3BPAG12345"
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 font-mono" />
+                  <div className="flex gap-2">
+                    <input value={newSerial} onChange={e => setNewSerial(e.target.value)} placeholder="ej: 3F06C3BPAG12345"
+                      className="flex-1 bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 font-mono" />
+                    <button type="button" onClick={startQrScanner}
+                      title="Escanear QR del DVR con la cámara"
+                      className="bg-slate-700 hover:bg-slate-600 text-white text-sm px-3 py-2 rounded-lg transition-colors flex items-center gap-1 whitespace-nowrap">
+                      📷 QR
+                    </button>
+                  </div>
                 </div>
                 <p className="text-slate-600 text-xs">Se usa el serial + usuario/contraseña para conectar via P2P Dahua desde internet.</p>
               </div>
@@ -554,6 +604,25 @@ export default function DvrsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Modal: escáner QR */}
+      {showQR && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-white font-semibold">📷 Escanear serial DVR</h3>
+                <p className="text-slate-500 text-xs mt-0.5">Apunta la cámara al código QR del DVR</p>
+              </div>
+              <button onClick={stopQrScanner} className="text-slate-400 hover:text-white text-xl leading-none">✕</button>
+            </div>
+            <div id={QR_DIV_ID} className="w-full rounded-xl overflow-hidden" />
+            <p className="text-slate-600 text-xs text-center">
+              El serial se llenará automáticamente al detectar el QR
+            </p>
+          </div>
         </div>
       )}
     </div>
