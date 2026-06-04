@@ -284,7 +284,7 @@ export async function notifyNewReply(t: TicketBasic, replyBody: string, agentNam
 
   const signatureHtml = signature
     ? `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0 0">
-        <tr><td style="border-top:1px solid #334155;padding:12px 0 0;color:#64748b;font-size:12px;line-height:1.6;white-space:pre-wrap">${signature.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td></tr>
+        <tr><td style="border-top:1px solid #334155;padding:12px 0 0;color:#64748b;font-size:12px;line-height:1.6">${signature.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</td></tr>
        </table>`
     : "";
 
