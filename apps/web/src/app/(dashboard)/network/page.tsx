@@ -1,7 +1,40 @@
 "use client";
 
 import { trpc } from "@/trpc/react";
-import { useState } from "react";
+import { useState, useCallback } from "react";
+
+// ── Ping desde browser (no-cors: si responde → online) ────────────────────────
+type PingState = "idle" | "pinging" | "online" | "offline";
+
+function usePing() {
+  const [states, setStates] = useState<Record<string, PingState>>({});
+  const [latencies, setLatencies] = useState<Record<string, number>>({});
+
+  const ping = useCallback(async (ip: string, ports: number[]) => {
+    setStates(prev => ({ ...prev, [ip]: "pinging" }));
+    const portsToTry = ports.length > 0 ? [...ports, 80, 443] : [80, 443, 8080, 22];
+    const t0 = Date.now();
+    let found = false;
+
+    for (const port of [...new Set(portsToTry)]) {
+      try {
+        await fetch(`http://${ip}:${port}/`, {
+          method: "HEAD",
+          mode: "no-cors",
+          signal: AbortSignal.timeout(2000),
+        });
+        found = true;
+        break;
+      } catch {}
+    }
+
+    const ms = Date.now() - t0;
+    setStates(prev => ({ ...prev, [ip]: found ? "online" : "offline" }));
+    if (found) setLatencies(prev => ({ ...prev, [ip]: ms }));
+  }, []);
+
+  return { states, latencies, ping };
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -328,6 +361,8 @@ export default function NetworkPage() {
     selectedScanId === "all" ? undefined : { scanId: selectedScanId },
   );
 
+  const { states: pingStates, latencies: pingLatencies, ping } = usePing();
+
   const deleteMut = trpc.networkDevices.delete.useMutation({
     onSuccess: () => {
       utils.networkDevices.list.invalidate();
@@ -536,6 +571,7 @@ export default function NetworkPage() {
                   <th className="text-left text-slate-500 text-xs font-medium px-4 py-3">ONVIF</th>
                   <th className="text-left text-slate-500 text-xs font-medium px-4 py-3">Activo</th>
                   <th className="text-left text-slate-500 text-xs font-medium px-4 py-3">Acceder</th>
+                  <th className="text-left text-slate-500 text-xs font-medium px-4 py-3">Ping</th>
                   <th className="text-left text-slate-500 text-xs font-medium px-4 py-3">Última vez</th>
                   <th className="text-left text-slate-500 text-xs font-medium px-4 py-3"></th>
                 </tr>
@@ -650,6 +686,31 @@ export default function NetworkPage() {
                             ⋯
                           </button>
                         </div>
+                      </td>
+
+                      {/* Ping */}
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const state   = pingStates[device.ip];
+                          const latency = pingLatencies[device.ip];
+                          return (
+                            <button
+                              onClick={() => ping(device.ip, device.openPorts as number[] ?? [])}
+                              disabled={state === "pinging"}
+                              title="Ping desde tu navegador (requiere estar en la misma red)"
+                              className={`text-xs px-2.5 py-1 rounded-lg border font-mono transition-colors whitespace-nowrap
+                                ${state === "online"  ? "border-green-700 text-green-400 bg-green-900/20" :
+                                  state === "offline" ? "border-red-800 text-red-400 bg-red-900/20" :
+                                  state === "pinging" ? "border-slate-700 text-slate-500 animate-pulse" :
+                                  "border-slate-700 text-slate-500 hover:text-yellow-400 hover:border-yellow-800"}`}
+                            >
+                              {state === "pinging" ? "…" :
+                               state === "online"  ? `✓ ${latency}ms` :
+                               state === "offline" ? "✗ offline" :
+                               "⚡ ping"}
+                            </button>
+                          );
+                        })()}
                       </td>
 
                       {/* Última vez */}
