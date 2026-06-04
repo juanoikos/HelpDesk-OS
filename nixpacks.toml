@@ -1,0 +1,2 @@
+# Forzar provider Node.js — evita que Nixpacks detecte apps/dahua-agent/*.csproj como .NET
+providers = ["node"]
