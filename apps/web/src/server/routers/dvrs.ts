@@ -163,7 +163,7 @@ export const dvrsRouter = router({
       return { created, skipped };
     }),
 
-  // ── Verificar conectividad de un DVR ────────────────────────────────────────
+  // ── Verificar conectividad de un DVR (auto-detecta puerto) ─────────────────
   checkStatus: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
@@ -173,46 +173,38 @@ export const dvrsRouter = router({
       });
       if (!dvr) throw new TRPCError({ code: "NOT_FOUND" });
 
-      let online = false;
-      try {
-        const url  = `http://${dvr.ip}:${dvr.port}/`;
-        const ctrl = new AbortController();
-        const t    = setTimeout(() => ctrl.abort(), 4000);
-        const res  = await fetch(url, { signal: ctrl.signal, method: "HEAD" });
-        clearTimeout(t);
-        online = res.status < 600;
-      } catch {}
+      const { port: foundPort } = await probePort(dvr.ip, dvr.port);
+      const status = foundPort ? "ONLINE" : "OFFLINE";
 
-      const status = online ? "ONLINE" : "OFFLINE";
       await prisma.dvr.update({
         where: { id: dvr.id },
-        data:  { status: status as "ONLINE" | "OFFLINE", lastChecked: new Date() },
+        data:  {
+          status:      status as "ONLINE" | "OFFLINE",
+          lastChecked: new Date(),
+          ...(foundPort && foundPort !== dvr.port ? { port: foundPort } : {}),
+        },
       });
-      return { status };
+      return { status, port: foundPort ?? dvr.port };
     }),
 
-  // ── Verificar todos los DVRs del tenant ─────────────────────────────────────
+  // ── Verificar todos los DVRs del tenant (auto-detecta puertos) ──────────────
   checkAll: protectedProcedure.mutation(async ({ ctx }) => {
     requireAdmin(ctx.session.user.role);
     const tenantId = ctx.session.user.tenantId;
     const dvrs     = await prisma.dvr.findMany({ where: { tenantId } });
 
     const results = await Promise.all(dvrs.map(async (dvr) => {
-      let online = false;
-      try {
-        const url  = `http://${dvr.ip}:${dvr.port}/`;
-        const ctrl = new AbortController();
-        const t    = setTimeout(() => ctrl.abort(), 4000);
-        const res  = await fetch(url, { signal: ctrl.signal, method: "HEAD" });
-        clearTimeout(t);
-        online = res.status < 600;
-      } catch {}
-      const status = (online ? "ONLINE" : "OFFLINE") as "ONLINE" | "OFFLINE";
+      const { port: foundPort } = await probePort(dvr.ip, dvr.port);
+      const status = (foundPort ? "ONLINE" : "OFFLINE") as "ONLINE" | "OFFLINE";
       await prisma.dvr.update({
         where: { id: dvr.id },
-        data:  { status, lastChecked: new Date() },
+        data:  {
+          status,
+          lastChecked: new Date(),
+          ...(foundPort && foundPort !== dvr.port ? { port: foundPort } : {}),
+        },
       });
-      return { id: dvr.id, status };
+      return { id: dvr.id, status, port: foundPort ?? dvr.port };
     }));
 
     const online  = results.filter(r => r.status === "ONLINE").length;
@@ -269,6 +261,32 @@ export const dvrsRouter = router({
       return recordings;
     }),
 });
+
+// ─── Auto-detección de puerto ────────────────────────────────────────────────
+
+// Puertos HTTP que usan los DVRs/NVRs Dahua e Hikvision, en orden de preferencia
+const DVR_PORTS = [80, 8080, 8000, 443, 8443, 9000, 81, 82];
+
+async function probePort(ip: string, currentPort: number): Promise<{ port: number | null }> {
+  // Primero prueba el puerto actual (más rápido si ya funcionaba)
+  const portsToTry = [currentPort, ...DVR_PORTS.filter(p => p !== currentPort)];
+
+  for (const port of portsToTry) {
+    try {
+      const ctrl = new AbortController();
+      const t    = setTimeout(() => ctrl.abort(), 3000);
+      const res  = await fetch(`http://${ip}:${port}/`, {
+        signal: ctrl.signal,
+        method: "HEAD",
+      });
+      clearTimeout(t);
+      if (res.status < 600) return { port };
+    } catch {
+      // puerto no responde, probar el siguiente
+    }
+  }
+  return { port: null };
+}
 
 // ─── Helpers Dahua ───────────────────────────────────────────────────────────
 
