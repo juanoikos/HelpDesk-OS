@@ -3,7 +3,8 @@ import { router, protectedProcedure } from "../trpc";
 import { prisma } from "@helpdesk-os/db";
 import { TRPCError } from "@trpc/server";
 import { isGo2rtcConfigured, streamName, unregisterStream } from "@/lib/go2rtc";
-import { ptzStart, ptzStop, gotoPreset, setPreset, getPresets } from "@helpdesk-os/dahua-sdk";
+import { ptzStart, ptzStop, gotoPreset, setPreset, getPresets,
+         getEncodeConfig, rebootDevice, getStorageInfo } from "@helpdesk-os/dahua-sdk";
 import type { PtzCode } from "@helpdesk-os/dahua-sdk";
 import crypto from "crypto";
 
@@ -203,6 +204,84 @@ export const vmsRouter = router({
 
     return { total24h: total, unread, byCode: byCode.map(b => ({ code: b.code, count: b._count._all })) };
   }),
+
+  // ── E-Map ────────────────────────────────────────────────────────────────────
+  listEmaps: protectedProcedure.query(async ({ ctx }) => {
+    requireAdmin(ctx.session.user.role);
+    return prisma.eMap.findMany({
+      where:   { tenantId: ctx.session.user.tenantId },
+      include: { devices: true },
+      orderBy: { order: "asc" },
+    });
+  }),
+
+  createEmap: protectedProcedure
+    .input(z.object({ name: z.string().min(1).max(80), imageUrl: z.string().url(), order: z.number().int().default(0) }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      return prisma.eMap.create({ data: { tenantId: ctx.session.user.tenantId, ...input } });
+    }),
+
+  deleteEmap: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      await prisma.eMap.deleteMany({ where: { id: input.id, tenantId: ctx.session.user.tenantId } });
+      return { ok: true };
+    }),
+
+  upsertEmapDevice: protectedProcedure
+    .input(z.object({
+      emapId:  z.string(),
+      dvrId:   z.string(),
+      channel: z.number().int().min(1),
+      x:       z.number().min(0).max(1),
+      y:       z.number().min(0).max(1),
+      label:   z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      const emap = await prisma.eMap.findFirst({ where: { id: input.emapId, tenantId: ctx.session.user.tenantId } });
+      if (!emap) throw new TRPCError({ code: "NOT_FOUND" });
+      return prisma.eMapDevice.upsert({
+        where:  { emapId_dvrId_channel: { emapId: input.emapId, dvrId: input.dvrId, channel: input.channel } },
+        create: input,
+        update: { x: input.x, y: input.y, label: input.label },
+      });
+    }),
+
+  removeEmapDevice: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      await prisma.eMapDevice.delete({ where: { id: input.id } });
+      return { ok: true };
+    }),
+
+  // ── Config remota ─────────────────────────────────────────────────────────────
+  getDeviceConfig: protectedProcedure
+    .input(z.object({ dvrId: z.string(), channel: z.number().int().min(1).default(1) }))
+    .query(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      const { username, password, ip, httpPort } = await getDvrCreds(input.dvrId, ctx.session.user.tenantId);
+      const [encode, storage] = await Promise.allSettled([
+        getEncodeConfig({ ip, port: httpPort, username, password }, input.channel),
+        getStorageInfo({ ip, port: httpPort, username, password }),
+      ]);
+      return {
+        encode:  encode.status  === "fulfilled" ? encode.value  : null,
+        storage: storage.status === "fulfilled" ? storage.value : null,
+      };
+    }),
+
+  rebootDevice: protectedProcedure
+    .input(z.object({ dvrId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      const { username, password, ip, httpPort } = await getDvrCreds(input.dvrId, ctx.session.user.tenantId);
+      await rebootDevice({ ip, port: httpPort, username, password });
+      return { ok: true };
+    }),
 
   // ── Info del tunnel del agente ───────────────────────────────────────────────
   getTunnel: protectedProcedure.query(async ({ ctx }) => {

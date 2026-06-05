@@ -3,3 +3,6 @@ export type { DvrConnection, SystemInfo, ProductDefinition, ChannelTitle } from 
 
 export { ptzStart, ptzStop, gotoPreset, setPreset, getPresets } from "./ptz";
 export type { PtzCode, PtzPreset, PtzConnection } from "./ptz";
+
+export { getEncodeConfig, rebootDevice, getStorageInfo } from "./config";
+export type { ChannelEncodeConfig, StorageInfo } from "./config";

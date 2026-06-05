@@ -36,6 +36,7 @@ model Tenant {
   dvrScanJobs     DvrScanJob[]
   agentTunnel     AgentTunnel?
   dvrAlarms       DvrAlarm[]
+  emaps           EMap[]
   monitorTargets  MonitorTarget[]
   monitorChecks   MonitorCheck[]
 
@@ -522,8 +523,9 @@ model Dvr {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  tenant  Tenant     @relation(fields: [tenantId], references: [id])
-  alarms  DvrAlarm[]
+  tenant     Tenant       @relation(fields: [tenantId], references: [id])
+  alarms     DvrAlarm[]
+  emapDevices EMapDevice[]
 
   @@unique([tenantId, ip])
   @@map("dvrs")
@@ -533,6 +535,39 @@ enum DvrStatus {
   ONLINE
   OFFLINE
   UNKNOWN
+}
+
+// ─── E-Map (planos electrónicos) ─────────────────────────────────────────────
+
+model EMap {
+  id        String      @id @default(cuid())
+  tenantId  String
+  name      String                          // "Planta 1 — Bodega"
+  imageUrl  String                          // URL del plano en R2
+  order     Int         @default(0)         // orden para tabs de pisos
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  tenant   Tenant       @relation(fields: [tenantId], references: [id])
+  devices  EMapDevice[]
+
+  @@map("emaps")
+}
+
+model EMapDevice {
+  id      String  @id @default(cuid())
+  emapId  String
+  dvrId   String
+  channel Int
+  x       Float                             // 0.0–1.0 (normalizado sobre imagen)
+  y       Float                             // 0.0–1.0
+  label   String?
+
+  emap    EMap @relation(fields: [emapId], references: [id], onDelete: Cascade)
+  dvr     Dvr  @relation(fields: [dvrId],  references: [id], onDelete: Cascade)
+
+  @@unique([emapId, dvrId, channel])
+  @@map("emap_devices")
 }
 
 // ─── Alarmas de DVR ──────────────────────────────────────────────────────────

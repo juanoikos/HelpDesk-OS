@@ -20,15 +20,20 @@ export default function VmsPage() {
   const utils = trpc.useUtils();
   const { data: dvrs, isLoading } = trpc.dvrs.list.useQuery();
 
-  const fetchInfo      = trpc.dvrs.fetchDeviceInfo.useMutation({
+  const fetchInfo   = trpc.dvrs.fetchDeviceInfo.useMutation({
     onSuccess: () => utils.dvrs.list.invalidate(),
     onError:   (e) => alert(`Error: ${e.message}`),
   });
-  const getSnapshot    = trpc.dvrs.getSnapshotUrl.useMutation();
+  const getSnapshot = trpc.dvrs.getSnapshotUrl.useMutation();
+  const reboot      = trpc.vms.rebootDevice.useMutation({
+    onSuccess: () => alert("✅ Reboot enviado — el DVR se reiniciará en ~30 segundos"),
+    onError:   (e) => alert(`Error: ${e.message}`),
+  });
 
   const [fetchingId,  setFetchingId]  = useState<string | null>(null);
   const [snapshots,   setSnapshots]   = useState<Record<string, string>>({});
   const [snapshotId,  setSnapshotId]  = useState<string | null>(null);
+  const [rebootingId, setRebootingId] = useState<string | null>(null);
 
   async function handleFetchInfo(id: string) {
     setFetchingId(id);
@@ -76,6 +81,10 @@ export default function VmsPage() {
           <Link href="/vms/alarms"
             className="text-sm px-4 py-2 rounded-lg bg-red-900/60 hover:bg-red-800/60 border border-red-800 text-red-300 hover:text-white transition-colors">
             🚨 Alarmas
+          </Link>
+          <Link href="/vms/emap"
+            className="text-sm px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors">
+            🗺️ E-Map
           </Link>
           <Link href="/dvrs"
             className="text-sm px-4 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors">
@@ -227,17 +236,25 @@ export default function VmsPage() {
                   )}
 
                   {/* Acciones */}
-                  <div className="flex gap-2 pt-1 border-t border-slate-800">
-                    <button
-                      onClick={() => handleFetchInfo(dvr.id)}
-                      disabled={fetchingId === dvr.id}
-                      className="flex-1 text-xs py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:border-blue-600 hover:text-blue-400 transition-colors disabled:opacity-50">
-                      {fetchingId === dvr.id ? "⏳ Consultando…" : "🔍 Obtener info"}
+                  <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-slate-800">
+                    <button onClick={() => handleFetchInfo(dvr.id)} disabled={fetchingId === dvr.id}
+                      className="text-xs py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:border-blue-600 hover:text-blue-400 transition-colors disabled:opacity-50">
+                      {fetchingId === dvr.id ? "⏳" : "🔍"} Info
                     </button>
                     <Link href={`/dvrs/${dvr.id}`}
-                      className="flex-1 text-center text-xs py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:border-green-600 hover:text-green-400 transition-colors">
+                      className="text-center text-xs py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:border-green-600 hover:text-green-400 transition-colors">
                       🎬 Grabaciones
                     </Link>
+                    <button onClick={() => handleSnapshot(dvr.id)} disabled={snapshotId === dvr.id}
+                      className="text-xs py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:border-yellow-600 hover:text-yellow-400 transition-colors disabled:opacity-50">
+                      {snapshotId === dvr.id ? "⏳" : "📸"} Snapshot
+                    </button>
+                    <button
+                      onClick={() => { if (confirm(`¿Reiniciar ${dvr.name}?`)) { setRebootingId(dvr.id); reboot.mutate({ dvrId: dvr.id }, { onSettled: () => setRebootingId(null) }); } }}
+                      disabled={rebootingId === dvr.id}
+                      className="text-xs py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:border-red-700 hover:text-red-400 transition-colors disabled:opacity-50">
+                      {rebootingId === dvr.id ? "⏳" : "🔄"} Reboot
+                    </button>
                   </div>
 
                   {/* Última actualización */}
