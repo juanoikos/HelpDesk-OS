@@ -64,10 +64,16 @@ export default function VmsPage() {
             {dvrs?.length ?? 0} dispositivos · Heartbeat cada 60 s
           </p>
         </div>
-        <Link href="/dvrs"
-          className="text-sm px-4 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors">
-          ← Volver a DVRs
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/vms/live"
+            className="text-sm px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors">
+            📺 Live View
+          </Link>
+          <Link href="/dvrs"
+            className="text-sm px-4 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors">
+            ← DVRs
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}

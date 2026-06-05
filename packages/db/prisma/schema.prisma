@@ -34,6 +34,7 @@ model Tenant {
   dvrs            Dvr[]
   dvrCredential   DvrCredential?
   dvrScanJobs     DvrScanJob[]
+  agentTunnel     AgentTunnel?
   monitorTargets  MonitorTarget[]
   monitorChecks   MonitorCheck[]
 
@@ -530,6 +531,21 @@ enum DvrStatus {
   ONLINE
   OFFLINE
   UNKNOWN
+}
+
+// ─── Tunnel del agente local (go2rtc + cloudflared) ─────────────────────────
+
+model AgentTunnel {
+  id        String   @id @default(cuid())
+  tenantId  String   @unique
+  tunnelUrl String                        // https://abc123.trycloudflare.com
+  lastSeen  DateTime @default(now())
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("agent_tunnels")
 }
 
 // ─── Trabajos de scan local de DVR ───────────────────────────────────────────

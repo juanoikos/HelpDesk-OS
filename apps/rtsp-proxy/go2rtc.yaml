@@ -1,0 +1,9 @@
+api:
+  listen: ":1984"
+  # origin: "*"   # descomentar si necesitas acceso directo desde browser
+
+log:
+  level: warn
+
+# Los streams se registran dinámicamente via API REST
+# PUT /api/streams?name={id}&src=rtsp://user:pass@ip:554/...
