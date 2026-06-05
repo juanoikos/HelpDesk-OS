@@ -49,10 +49,84 @@ export default function DvrsPage() {
   const [newUsername,  setNewUsername]  = useState("admin");
   const [newPassword,  setNewPassword]  = useState("");
 
+  // Foto del DVR
+  const [newPhotoFile,    setNewPhotoFile]    = useState<File | null>(null);
+  const [newPhotoPreview, setNewPhotoPreview] = useState<string | null>(null);
+  const [uploadingPhoto,  setUploadingPhoto]  = useState(false);
+  const [photoEditDvrId,  setPhotoEditDvrId]  = useState<string | null>(null);
+  const [showPhotoModal,  setShowPhotoModal]  = useState<{ id: string; name: string; url: string } | null>(null);
+  const newPhotoRef  = useRef<HTMLInputElement>(null);
+  const editPhotoRef = useRef<HTMLInputElement>(null);
+
+  function handleNewPhotoChange(file: File) {
+    setNewPhotoFile(file);
+    const url = URL.createObjectURL(file);
+    setNewPhotoPreview(url);
+  }
+
+  async function uploadDvrPhoto(dvrId: string, file: File): Promise<string | null> {
+    const fd = new FormData();
+    fd.append("file",  file);
+    fd.append("dvrId", dvrId);
+    const res = await fetch("/api/upload-dvr", { method: "POST", body: fd });
+    if (!res.ok) { const e = await res.json(); alert(e.error ?? "Error al subir la foto"); return null; }
+    const data = await res.json();
+    return data.url as string;
+  }
+
+  async function handleEditPhoto(dvrId: string, file: File) {
+    setPhotoEditDvrId(dvrId);
+    setUploadingPhoto(true);
+    try {
+      await uploadDvrPhoto(dvrId, file);
+      utils.dvrs.list.invalidate();
+    } finally {
+      setUploadingPhoto(false);
+      setPhotoEditDvrId(null);
+    }
+  }
+
   // QR scanner
   const [showQR,      setShowQR]      = useState(false);
   const qrScannerRef  = useRef<{ stop: () => Promise<void> } | null>(null);
   const QR_DIV_ID     = "dvr-qr-reader";
+
+  // OCR de foto de serial
+  const [showOcr,       setShowOcr]       = useState(false);
+  const [ocrProcessing, setOcrProcessing] = useState(false);
+  const [ocrCandidates, setOcrCandidates] = useState<string[]>([]);
+  const [ocrPreview,    setOcrPreview]    = useState<string | null>(null);
+  const photoInputRef   = useRef<HTMLInputElement>(null);
+
+  async function handlePhotoCapture(file: File) {
+    const url = URL.createObjectURL(file);
+    setOcrPreview(url);
+    setShowOcr(true);
+    setOcrProcessing(true);
+    setOcrCandidates([]);
+    try {
+      const { createWorker } = await import("tesseract.js");
+      const worker = await createWorker("eng");
+      const { data: { text } } = await worker.recognize(file);
+      await worker.terminate();
+      const raw = text.toUpperCase().replace(/[^A-Z0-9\s]/g, " ");
+      const matches = raw.match(/[A-Z0-9]{6,20}/g) ?? [];
+      setOcrCandidates([...new Set(matches)]);
+    } catch (err) {
+      console.error("OCR error:", err);
+      alert("No se pudo procesar la imagen. Intenta con mejor iluminación.");
+      setShowOcr(false);
+    } finally {
+      setOcrProcessing(false);
+    }
+  }
+
+  function confirmOcrSerial(serial: string) {
+    setNewSerial(extractSerial(serial));
+    setShowOcr(false);
+    setOcrPreview(null);
+    setOcrCandidates([]);
+  }
 
   function extractSerial(raw: string): string {
     let s = raw.trim();
@@ -98,8 +172,19 @@ export default function DvrsPage() {
 
   const saveCred  = trpc.dvrs.saveCredential.useMutation({ onSuccess: () => { utils.dvrs.getCredential.invalidate(); setCredOk(true); } });
   const createDvr = trpc.dvrs.create.useMutation({
-    onSuccess: () => { utils.dvrs.list.invalidate(); setShowAdd(false); setNewName(""); setNewSerial(""); setNewIp(""); setNewLocalIp(""); setNewLocalPort("37777"); setNewPort("80"); setNewChannels("8"); setNewLocation(""); setUseOwnCred(false); setNewUsername("admin"); setNewPassword(""); },
-    onError:   (e) => alert(e.message),
+    onSuccess: async (dvr) => {
+      if (newPhotoFile) {
+        setUploadingPhoto(true);
+        try { await uploadDvrPhoto(dvr.id, newPhotoFile); } finally { setUploadingPhoto(false); }
+      }
+      utils.dvrs.list.invalidate();
+      setShowAdd(false);
+      setNewName(""); setNewSerial(""); setNewIp(""); setNewLocalIp("");
+      setNewLocalPort("37777"); setNewPort("80"); setNewChannels("8"); setNewLocation("");
+      setUseOwnCred(false); setNewUsername("admin"); setNewPassword("");
+      setNewPhotoFile(null); setNewPhotoPreview(null);
+    },
+    onError: (e) => alert(e.message),
   });
   const deleteDvr = trpc.dvrs.delete.useMutation({ onSuccess: () => utils.dvrs.list.invalidate(), onError: (e) => alert(e.message) });
   const checkOne  = trpc.dvrs.checkStatus.useMutation({ onSuccess: () => utils.dvrs.list.invalidate() });
@@ -355,10 +440,18 @@ export default function DvrsPage() {
                     <input value={newSerial} onChange={e => setNewSerial(e.target.value)} placeholder="ej: 3F06C3BPAG12345"
                       className="flex-1 bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 font-mono" />
                     <button type="button" onClick={startQrScanner}
-                      title="Escanear QR del DVR con la cámara"
+                      title="Escanear código QR del DVR con la cámara"
                       className="bg-slate-700 hover:bg-slate-600 text-white text-sm px-3 py-2 rounded-lg transition-colors flex items-center gap-1 whitespace-nowrap">
                       📷 QR
                     </button>
+                    <button type="button" onClick={() => photoInputRef.current?.click()}
+                      title="Tomar foto del serial para leerlo automáticamente"
+                      className="bg-slate-700 hover:bg-slate-600 text-white text-sm px-3 py-2 rounded-lg transition-colors flex items-center gap-1 whitespace-nowrap">
+                      🔤 Foto
+                    </button>
+                    <input ref={photoInputRef} type="file" accept="image/*" capture="environment"
+                      className="hidden"
+                      onChange={e => { if (e.target.files?.[0]) handlePhotoCapture(e.target.files[0]); e.target.value = ""; }} />
                   </div>
                 </div>
                 <p className="text-slate-600 text-xs">Se usa el serial + usuario/contraseña para conectar via P2P Dahua desde internet.</p>
@@ -367,36 +460,36 @@ export default function DvrsPage() {
               {/* Acceso local */}
               <div className="border border-slate-700 rounded-xl p-3 space-y-2">
                 <p className="text-xs font-medium text-green-400">🏠 Acceso local (dentro de la red)</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="col-span-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
                     <label className="text-slate-500 text-xs mb-1 block">IP local</label>
                     <input value={newLocalIp} onChange={e => setNewLocalIp(e.target.value)} placeholder="192.168.1.15"
                       className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                   </div>
-                  <div>
-                    <label className="text-slate-500 text-xs mb-1 block">Puerto</label>
-                    <input value={newLocalPort} onChange={e => setNewLocalPort(e.target.value)} type="number"
-                      className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-500 text-xs mb-1 block">Puerto TCP</label>
+                      <input value={newLocalPort} onChange={e => setNewLocalPort(e.target.value)} type="number"
+                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 text-xs mb-1 block">Puerto HTTP</label>
+                      <input value={newPort} onChange={e => setNewPort(e.target.value)} type="number"
+                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                    </div>
                   </div>
                 </div>
-                <p className="text-slate-600 text-xs">Puerto 37777 por defecto (protocolo Dahua TCP). Solo disponible desde la misma red.</p>
+                <p className="text-slate-600 text-xs">TCP 37777 (Dahua) y HTTP 80 (web API) — solo accesibles desde la misma red.</p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-slate-500 text-xs mb-1 block">Puerto</label>
-                  <input value={newPort} onChange={e => setNewPort(e.target.value)} type="number"
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-                </div>
-                <div>
-                  <label className="text-slate-500 text-xs mb-1 block">Canales</label>
-                  <select value={newChannels} onChange={e => setNewChannels(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
-                    <option value="4">4 canales</option>
-                    <option value="8">8 canales</option>
-                    <option value="16">16 canales</option>
-                    <option value="32">32 canales</option>
-                  </select>
-                </div>
+              <div>
+                <label className="text-slate-500 text-xs mb-1 block">Canales</label>
+                <select value={newChannels} onChange={e => setNewChannels(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                  <option value="4">4 canales</option>
+                  <option value="8">8 canales</option>
+                  <option value="16">16 canales</option>
+                  <option value="32">32 canales</option>
+                </select>
               </div>
               <input value={newLocation} onChange={e => setNewLocation(e.target.value)} placeholder="Sede / Ubicación (opcional)"
                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
@@ -424,6 +517,30 @@ export default function DvrsPage() {
                 )}
               </div>
             </div>
+              {/* Foto */}
+              <div className="border border-slate-700 rounded-xl p-3 space-y-2">
+                <p className="text-xs font-medium text-slate-400">📷 Foto de la sede / equipo</p>
+                {newPhotoPreview ? (
+                  <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={newPhotoPreview} alt="Vista previa" className="w-full h-36 object-cover rounded-lg border border-slate-600" />
+                    <button onClick={() => { setNewPhotoFile(null); setNewPhotoPreview(null); }}
+                      className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-black/80 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => newPhotoRef.current?.click()}
+                    className="w-full h-24 border-2 border-dashed border-slate-700 hover:border-slate-500 rounded-xl flex flex-col items-center justify-center gap-1 text-slate-500 hover:text-slate-400 transition-colors">
+                    <span className="text-2xl">🖼️</span>
+                    <span className="text-xs">Toca para agregar foto</span>
+                  </button>
+                )}
+                <input ref={newPhotoRef} type="file" accept="image/*" capture="environment"
+                  className="hidden"
+                  onChange={e => { if (e.target.files?.[0]) handleNewPhotoChange(e.target.files[0]); e.target.value = ""; }} />
+              </div>
+
             <div className="flex gap-2 justify-end">
               <button onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-white text-sm px-4 py-2">Cancelar</button>
               <button
@@ -439,9 +556,9 @@ export default function DvrsPage() {
                   username:  useOwnCred && newUsername ? newUsername : undefined,
                   password:  useOwnCred && newPassword ? newPassword : undefined,
                 })}
-                disabled={createDvr.isPending || !newName.trim() || (!newLocalIp.trim() && !newSerial.trim()) || (useOwnCred && !newPassword.trim())}
+                disabled={createDvr.isPending || uploadingPhoto || !newName.trim() || (!newLocalIp.trim() && !newSerial.trim()) || (useOwnCred && !newPassword.trim())}
                 className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg">
-                {createDvr.isPending ? "Guardando…" : "Agregar"}
+                {uploadingPhoto ? "Subiendo foto…" : createDvr.isPending ? "Guardando…" : "Agregar"}
               </button>
             </div>
           </div>
@@ -530,6 +647,7 @@ export default function DvrsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-800/50 border-b border-slate-800">
+                <th className="text-left text-slate-400 font-medium px-4 py-3 w-14">Foto</th>
                 <th className="text-left text-slate-400 font-medium px-4 py-3">Nombre / Sede</th>
                 <th className="text-left text-slate-400 font-medium px-4 py-3">IP</th>
                 <th className="text-left text-slate-400 font-medium px-4 py-3">Canales</th>
@@ -541,6 +659,28 @@ export default function DvrsPage() {
             <tbody className="divide-y divide-slate-800">
               {filtered.map(dvr => (
                 <tr key={dvr.id} className="hover:bg-slate-800/30 transition-colors group">
+                  {/* Foto thumbnail */}
+                  <td className="px-3 py-2">
+                    {(dvr as { photoUrl?: string | null }).photoUrl ? (
+                      <button
+                        onClick={() => setShowPhotoModal({ id: dvr.id, name: dvr.name, url: (dvr as { photoUrl?: string | null }).photoUrl! })}
+                        className="relative block w-10 h-10 rounded-lg overflow-hidden border border-slate-700 hover:border-blue-500 transition-colors">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={(dvr as { photoUrl?: string | null }).photoUrl!} alt={dvr.name}
+                          className="w-full h-full object-cover" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => { setPhotoEditDvrId(dvr.id); editPhotoRef.current?.click(); }}
+                        disabled={uploadingPhoto && photoEditDvrId === dvr.id}
+                        title="Agregar foto"
+                        className="w-10 h-10 rounded-lg border border-dashed border-slate-700 hover:border-slate-500 flex items-center justify-center text-slate-600 hover:text-slate-400 transition-colors text-lg disabled:opacity-50">
+                        {uploadingPhoto && photoEditDvrId === dvr.id ? (
+                          <div className="w-3.5 h-3.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                        ) : "📷"}
+                      </button>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <p className="text-white font-medium">{dvr.name}</p>
                     {dvr.location && <p className="text-slate-500 text-xs">{dvr.location}</p>}
@@ -594,6 +734,15 @@ export default function DvrsPage() {
                         className="text-slate-500 hover:text-yellow-400 text-xs transition-colors">
                         ⚡
                       </button>
+                      {(dvr as { photoUrl?: string | null }).photoUrl && (
+                        <button
+                          onClick={() => { setPhotoEditDvrId(dvr.id); editPhotoRef.current?.click(); }}
+                          disabled={uploadingPhoto && photoEditDvrId === dvr.id}
+                          title="Cambiar foto"
+                          className="text-slate-500 hover:text-blue-400 text-xs transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50">
+                          {uploadingPhoto && photoEditDvrId === dvr.id ? "⏳" : "🖼️"}
+                        </button>
+                      )}
                       <button onClick={() => { if (confirm(`¿Eliminar ${dvr.name}?`)) deleteDvr.mutate({ id: dvr.id }); }}
                         className="text-slate-600 hover:text-red-400 text-xs transition-colors opacity-0 group-hover:opacity-100">
                         🗑
@@ -621,6 +770,91 @@ export default function DvrsPage() {
             <div id={QR_DIV_ID} className="w-full rounded-xl overflow-hidden" />
             <p className="text-slate-600 text-xs text-center">
               El serial se llenará automáticamente al detectar el QR
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Input oculto para cambiar foto de DVR existente */}
+      <input ref={editPhotoRef} type="file" accept="image/*" capture="environment"
+        className="hidden"
+        onChange={e => {
+          if (e.target.files?.[0] && photoEditDvrId) handleEditPhoto(photoEditDvrId, e.target.files[0]);
+          e.target.value = "";
+        }} />
+
+      {/* Modal: foto ampliada */}
+      {showPhotoModal && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] p-4"
+          onClick={() => setShowPhotoModal(null)}>
+          <div className="relative max-w-2xl w-full" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-white font-semibold">{showPhotoModal.name}</p>
+              <button onClick={() => setShowPhotoModal(null)} className="text-slate-400 hover:text-white text-xl">✕</button>
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={showPhotoModal.url} alt={showPhotoModal.name}
+              className="w-full rounded-2xl border border-slate-700 object-contain max-h-[70vh]" />
+            <button
+              onClick={() => {
+                setPhotoEditDvrId(showPhotoModal.id);
+                setShowPhotoModal(null);
+                setTimeout(() => editPhotoRef.current?.click(), 100);
+              }}
+              className="mt-3 w-full text-center text-slate-400 hover:text-white text-sm py-2 border border-slate-700 hover:border-slate-500 rounded-xl transition-colors">
+              📷 Cambiar foto
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: OCR de foto de serial */}
+      {showOcr && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-white font-semibold">🔤 Leer serial de foto</h3>
+                <p className="text-slate-500 text-xs mt-0.5">
+                  {ocrProcessing ? "Procesando imagen…" : "Selecciona el serial detectado"}
+                </p>
+              </div>
+              <button onClick={() => { setShowOcr(false); setOcrPreview(null); setOcrCandidates([]); }}
+                className="text-slate-400 hover:text-white text-xl leading-none">✕</button>
+            </div>
+
+            {/* Preview de la foto */}
+            {ocrPreview && (
+              <div className="rounded-xl overflow-hidden border border-slate-700">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={ocrPreview} alt="Foto serial" className="w-full max-h-48 object-contain bg-black" />
+              </div>
+            )}
+
+            {ocrProcessing ? (
+              <div className="flex items-center justify-center gap-3 py-4">
+                <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-slate-400 text-sm">Leyendo texto…</span>
+              </div>
+            ) : ocrCandidates.length === 0 ? (
+              <div className="text-center py-3">
+                <p className="text-slate-400 text-sm">No se detectaron seriales válidos.</p>
+                <p className="text-slate-600 text-xs mt-1">Asegúrate de que el serial sea visible y bien iluminado.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-slate-400 text-xs font-medium">Toca el serial para usarlo:</p>
+                {ocrCandidates.map(s => (
+                  <button key={s} onClick={() => confirmOcrSerial(s)}
+                    className="w-full text-left font-mono text-white text-sm bg-slate-800 hover:bg-blue-900/40 hover:border-blue-600 border border-slate-700 rounded-xl px-4 py-2.5 transition-colors">
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <p className="text-slate-600 text-xs text-center">
+              Si no aparece el correcto, ingresa el serial manualmente en el campo de texto.
             </p>
           </div>
         </div>

@@ -79,6 +79,7 @@ export const dvrsRouter = router({
       password:  z.string().optional(),
       location:  z.string().max(100).optional(),
       notes:     z.string().max(300).optional(),
+      photoUrl:  z.string().url().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       requireAdmin(ctx.session.user.role);
@@ -106,6 +107,7 @@ export const dvrsRouter = router({
       password:  z.string().optional().nullable(),
       location:  z.string().max(100).optional().nullable(),
       notes:     z.string().max(300).optional().nullable(),
+      photoUrl:  z.string().url().optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       requireAdmin(ctx.session.user.role);

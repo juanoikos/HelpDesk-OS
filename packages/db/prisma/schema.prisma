@@ -508,6 +508,7 @@ model Dvr {
   password    String?                       // cifrada con AES (si es null usa la global)
   location    String?                       // sede / dirección
   notes       String?
+  photoUrl    String?                       // foto de la sede / equipo (URL en R2)
   status      DvrStatus @default(UNKNOWN)
   lastChecked DateTime?
   createdAt   DateTime  @default(now())
