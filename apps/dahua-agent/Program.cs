@@ -41,8 +41,9 @@ Console.WriteLine();
 Console.WriteLine("  ╔═══════════════════════════════════════════════╗");
 Console.WriteLine("  ║   HelpDesk OS — Agente Dahua (Dahua.Api)     ║");
 Console.WriteLine("  ╚═══════════════════════════════════════════════╝");
-Console.WriteLine($"  🔗 Servidor : {config.ServerUrl}");
-Console.WriteLine($"  ⏱  Polling  : cada {config.PollIntervalSeconds}s");
+Console.WriteLine($"  🔗 Servidor  : {config.ServerUrl}");
+Console.WriteLine($"  ⏱  Polling   : cada {config.PollIntervalSeconds}s");
+Console.WriteLine($"  📺 Live View : {(config.EnableLiveView ? "ACTIVADO" : "desactivado")}");
 Console.WriteLine($"  📅 {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 Console.WriteLine();
 
@@ -51,6 +52,14 @@ DvrService.Init();
 
 // ─── Clientes ─────────────────────────────────────────────────────────────────
 var api = new ApiClient(config.ServerUrl, config.AgentToken);
+
+// ─── Tunnel Live View (opcional) ─────────────────────────────────────────────
+TunnelService? tunnel = null;
+if (config.EnableLiveView)
+{
+    tunnel = new TunnelService(api, config.LiveViewPort);
+    await tunnel.StartAsync(cts.Token);
+}
 
 Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] Esperando trabajos...\n");
 
@@ -115,5 +124,6 @@ while (!cts.Token.IsCancellationRequested)
 }
 
 // ─── Cleanup ──────────────────────────────────────────────────────────────────
+if (tunnel is not null) await tunnel.DisposeAsync();
 DvrService.Cleanup();
 Console.WriteLine($"\n[{DateTime.Now:HH:mm:ss}] Agente detenido. ¡Hasta luego!");

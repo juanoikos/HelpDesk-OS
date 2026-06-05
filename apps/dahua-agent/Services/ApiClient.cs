@@ -35,6 +35,20 @@ public class ApiClient
         return JsonSerializer.Deserialize<List<DvrJob>>(json, _json) ?? new List<DvrJob>();
     }
 
+    /// <summary>Registra la URL del tunnel cloudflared en el servidor.</summary>
+    public async Task RegisterTunnelAsync(string tunnelUrl)
+    {
+        var payload = JsonSerializer.Serialize(new { tunnelUrl }, _json);
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+        await _http.PostAsync($"{_baseUrl}/api/agent/tunnel-register", content);
+    }
+
+    /// <summary>Desregistra el tunnel al cerrar el agente.</summary>
+    public async Task UnregisterTunnelAsync()
+    {
+        await _http.DeleteAsync($"{_baseUrl}/api/agent/tunnel-register");
+    }
+
     /// <summary>Envía el resultado de un trabajo al servidor.</summary>
     public async Task<bool> PostResultAsync(JobResult result)
     {
