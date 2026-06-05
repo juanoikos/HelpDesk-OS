@@ -11,5 +11,8 @@ export async function register() {
 
     const { startWanMonitor } = await import("./lib/wan-monitor");
     startWanMonitor();
+
+    const { startDvrHeartbeat } = await import("./lib/dvr-heartbeat");
+    startDvrHeartbeat();
   }
 }

@@ -3,6 +3,7 @@ import { router, protectedProcedure } from "../trpc";
 import { prisma } from "@helpdesk-os/db";
 import { TRPCError } from "@trpc/server";
 import crypto from "crypto";
+import { fetchDeviceInfo, DahuaRPC2Client } from "@helpdesk-os/dahua-sdk";
 
 // ─── Cifrado simple AES-256 para contraseñas DVR ────────────────────────────
 const ENC_KEY = (process.env.AUTH_SECRET ?? "helpdesk-dvr-secret-key-32chars!").slice(0, 32);
@@ -308,6 +309,106 @@ export const dvrsRouter = router({
         localIp:    dvr.localIp ?? dvr.ip ?? null,
         port:       dvr.port,
       };
+    }),
+
+  // ── Obtener info del dispositivo via SDK (modelo, firmware, canales) ─────────
+  fetchDeviceInfo: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      const tenantId = ctx.session.user.tenantId;
+
+      const [dvr, cred] = await Promise.all([
+        prisma.dvr.findFirst({ where: { id: input.id, tenantId } }),
+        prisma.dvrCredential.findUnique({ where: { tenantId } }),
+      ]);
+      if (!dvr) throw new TRPCError({ code: "NOT_FOUND" });
+
+      let username: string;
+      let password: string;
+      if (dvr.username && dvr.password) {
+        username = dvr.username;
+        password = decrypt(dvr.password);
+      } else if (cred) {
+        username = cred.username;
+        password = decrypt(cred.password);
+      } else {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Configura las credenciales primero" });
+      }
+
+      const ip   = dvr.localIp ?? dvr.ip;
+      const port = dvr.port ?? 80;
+
+      let info: Awaited<ReturnType<typeof fetchDeviceInfo>>;
+      try {
+        info = await fetchDeviceInfo({ ip, port, username, password, timeoutMs: 8000 });
+      } catch (err) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `No se pudo conectar: ${String(err)}` });
+      }
+
+      const sys  = info.systemInfo;
+      const prod = info.productDef;
+
+      await prisma.dvr.update({
+        where: { id: dvr.id },
+        data: {
+          deviceModel:   sys?.hardwareVersion ?? prod?.deviceType ?? null,
+          firmware:      sys?.softwareVersion ?? null,
+          deviceType:    sys?.deviceType      ?? prod?.deviceType ?? null,
+          channelNames:  info.channelTitles.length > 0 ? JSON.parse(JSON.stringify(info.channelTitles)) : undefined,
+          lastInfoFetch: new Date(),
+          ...(prod?.maxCamera && prod.maxCamera > 0 ? { channels: prod.maxCamera } : {}),
+          status:        "ONLINE",
+          lastChecked:   new Date(),
+        },
+      });
+
+      return {
+        deviceModel:   sys?.hardwareVersion ?? prod?.deviceType ?? null,
+        firmware:      sys?.softwareVersion ?? null,
+        deviceType:    sys?.deviceType      ?? null,
+        serialNumber:  sys?.serialNumber    ?? dvr.serial ?? null,
+        channels:      prod?.maxCamera      ?? dvr.channels,
+        channelTitles: info.channelTitles,
+      };
+    }),
+
+  // ── Snapshot en vivo de un canal ─────────────────────────────────────────────
+  getSnapshotUrl: protectedProcedure
+    .input(z.object({ id: z.string(), channel: z.number().int().min(1).default(1) }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      const tenantId = ctx.session.user.tenantId;
+
+      const [dvr, cred] = await Promise.all([
+        prisma.dvr.findFirst({ where: { id: input.id, tenantId } }),
+        prisma.dvrCredential.findUnique({ where: { tenantId } }),
+      ]);
+      if (!dvr) throw new TRPCError({ code: "NOT_FOUND" });
+
+      let username: string;
+      let password: string;
+      if (dvr.username && dvr.password) {
+        username = dvr.username;
+        password = decrypt(dvr.password);
+      } else if (cred) {
+        username = cred.username;
+        password = decrypt(cred.password);
+      } else {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Configura las credenciales primero" });
+      }
+
+      const ip   = dvr.localIp ?? dvr.ip;
+      const port = dvr.port ?? 80;
+
+      try {
+        const client = new DahuaRPC2Client({ ip, port, username, password, timeoutMs: 6000 });
+        const buffer = await client.getSnapshot(input.channel);
+        const b64    = buffer.toString("base64");
+        return { dataUrl: `data:image/jpeg;base64,${b64}` };
+      } catch (err) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Snapshot fallido: ${String(err)}` });
+      }
     }),
 
   // ── Crear job de scan local ──────────────────────────────────────────────────

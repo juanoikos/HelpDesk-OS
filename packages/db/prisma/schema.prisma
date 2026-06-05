@@ -509,6 +509,12 @@ model Dvr {
   location    String?                       // sede / dirección
   notes       String?
   photoUrl    String?                       // foto de la sede / equipo (URL en R2)
+  // ── Info obtenida del dispositivo via SDK ────────────────────────────────
+  deviceModel   String?                     // ej: "XVR5116H-4KL-I2"
+  firmware      String?                     // ej: "V2.680.0000000.20"
+  deviceType    String?                     // ej: "XVR", "NVR", "IPC"
+  channelNames  Json?                       // [{channel:1, name:"Entrada"}, ...]
+  lastInfoFetch DateTime?                   // última vez que se obtuvo info del SDK
   status      DvrStatus @default(UNKNOWN)
   lastChecked DateTime?
   createdAt   DateTime  @default(now())
