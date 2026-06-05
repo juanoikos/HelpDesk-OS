@@ -5,10 +5,14 @@
  * Este endpoint autentica la sesión, obtiene credenciales del DVR,
  * registra el stream en go2rtc y hace proxy del HLS.
  *
- * Rutas:
- *   GET /api/vms/stream/{dvrId}/{channel}/index.m3u8   — playlist HLS
- *   GET /api/vms/stream/{dvrId}/{channel}/{file}.ts    — segmentos
- *   GET /api/vms/stream/{dvrId}/{channel}/{file}.m4s   — segmentos fMP4
+ * Rutas LIVE:
+ *   GET /api/vms/stream/{dvrId}/{channel}/index.m3u8   — playlist live
+ *   GET /api/vms/stream/{dvrId}/{channel}/{seg}.ts     — segmentos live
+ *
+ * Rutas PLAYBACK:
+ *   GET /api/vms/stream/{dvrId}/{channel}/pb/{start}/{end}/index.m3u8
+ *   GET /api/vms/stream/{dvrId}/{channel}/pb/{start}/{end}/{seg}.ts
+ *   start/end formato: YYYYMMDDHHMMSS  (ej: 20260605140000)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -49,10 +53,15 @@ export async function GET(
     return NextResponse.json({ error: "Ruta inválida: /{dvrId}/{channel}/{file}" }, { status: 400 });
   }
 
-  const [dvrId, channelStr, ...fileParts] = slug;
-  const channel = parseInt(channelStr ?? "1") || 1;
-  const file    = fileParts.join("/");
+  const [dvrId, channelStr, ...rest] = slug;
+  const channel  = parseInt(channelStr ?? "1") || 1;
   const tenantId = session.user.tenantId;
+
+  // Detectar playback: /pb/{start}/{end}/{file}
+  const isPlayback = rest[0] === "pb";
+  const pbStart    = isPlayback ? rest[1] : undefined;  // YYYYMMDDHHMMSS
+  const pbEnd      = isPlayback ? rest[2] : undefined;
+  const file       = isPlayback ? (rest.slice(3).join("/") || "index.m3u8") : rest.join("/");
 
   // ── Verificar go2rtc configurado ───────────────────────────────────────────
   if (!isGo2rtcConfigured()) {
@@ -91,13 +100,26 @@ export async function GET(
   const ip      = dvr.localIp ?? dvr.ip;
   const rtspPort = 554; // Dahua standard
 
+  // ── Nombre del stream y URL RTSP (live vs playback) ──────────────────────
+  let name:    string;
+  let rtspUrl: string;
+
+  if (isPlayback && pbStart && pbEnd) {
+    // Playback: nombre único por sesión de reproducción
+    name    = `${streamName(dvrId!, channel)}_pb_${pbStart}`;
+    // URL RTSP de reproducción Dahua: formato YYYY_MM_DD_HH_MM_SS
+    const fmt = (s: string) =>
+      `${s.slice(0,4)}_${s.slice(4,6)}_${s.slice(6,8)}_${s.slice(8,10)}_${s.slice(10,12)}_${s.slice(12,14)}`;
+    rtspUrl = `rtsp://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${ip}:554/cam/playback?channel=${channel}&starttime=${fmt(pbStart)}&endtime=${fmt(pbEnd)}`;
+  } else {
+    name    = streamName(dvrId!, channel);
+    rtspUrl = buildDahuaRtspUrl({ ip, rtspPort, username, password, channel, subtype: 1 });
+  }
+
   // ── Registrar stream en go2rtc (solo en index.m3u8, primera petición) ─────
   if (file === "index.m3u8") {
-    const name    = streamName(dvrId!, channel);
     const already = await streamExists(name, go2rtcBase);
-
     if (!already) {
-      const rtspUrl = buildDahuaRtspUrl({ ip, rtspPort, username, password, channel, subtype: 1 });
       try {
         await registerStream(name, rtspUrl, go2rtcBase);
       } catch (err) {
@@ -106,13 +128,11 @@ export async function GET(
           { status: 502 },
         );
       }
-      // Pequeña espera para que go2rtc conecte al DVR
       await new Promise(r => setTimeout(r, 800));
     }
   }
 
   // ── Proxy de la petición HLS a go2rtc ─────────────────────────────────────
-  const name      = streamName(dvrId!, channel);
   const go2rtcUrl = file === "index.m3u8"
     ? getGo2rtcHlsUrl(name, go2rtcBase)
     : `${(go2rtcBase ?? process.env.GO2RTC_URL)?.replace(/\/$/, "")}/${name}/hls/live/${file}`;

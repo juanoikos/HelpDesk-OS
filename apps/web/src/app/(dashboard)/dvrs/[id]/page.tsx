@@ -5,6 +5,144 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
+// ─── Componente playback HLS ──────────────────────────────────────────────────
+function PlaybackPlayer({ src, title, onClose }: { src: string; title: string; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [status, setStatus] = useState<"loading" | "playing" | "error">("loading");
+
+  useEffect(() => {
+    let destroyed = false;
+    async function init() {
+      const video = videoRef.current;
+      if (!video) return;
+      const Hls = (await import("hls.js")).default;
+      if (Hls.isSupported()) {
+        const hls = new Hls({ lowLatencyMode: false, maxBufferLength: 60 });
+        hls.loadSource(src);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => { if (!destroyed) { video.play().catch(() => {}); setStatus("playing"); } });
+        hls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal && !destroyed) setStatus("error"); });
+        return () => hls.destroy();
+      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = src;
+        video.addEventListener("loadedmetadata", () => { if (!destroyed) { video.play().catch(() => {}); setStatus("playing"); } });
+        video.addEventListener("error", () => { if (!destroyed) setStatus("error"); });
+      }
+    }
+    const cleanup = init();
+    return () => { destroyed = true; cleanup?.then(fn => fn?.()); };
+  }, [src]);
+
+  return (
+    <div className="bg-black rounded-xl overflow-hidden border border-slate-700 mt-2">
+      <div className="flex items-center justify-between px-3 py-2 bg-slate-900">
+        <span className="text-white text-xs font-medium">▶ {title}</span>
+        <button onClick={onClose} className="text-slate-400 hover:text-white text-sm">✕</button>
+      </div>
+      <div className="relative">
+        <video ref={videoRef} className="w-full max-h-64 object-contain bg-black" controls autoPlay muted playsInline />
+        {status === "loading" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/70">
+            <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+        {status === "error" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/70">
+            <p className="text-red-400 text-xs text-center p-4">⚠️ No se pudo reproducir — verifica go2rtc y credenciales</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Timeline de grabaciones (SVG 24h) ────────────────────────────────────────
+function RecordingTimeline({
+  recordings,
+  date,
+  onSelectRange,
+}: {
+  recordings: { channel: number; start: string; end: string }[];
+  date: string;
+  onSelectRange: (start: string, end: string) => void;
+}) {
+  if (recordings.length === 0) return null;
+
+  const COLORS = ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#ec4899","#06b6d4","#84cc16"];
+  const channels = [...new Set(recordings.map(r => r.channel))].sort((a, b) => a - b);
+
+  function toMinutes(timeStr: string): number {
+    const t = timeStr.includes(" ") ? timeStr.split(" ")[1]! : timeStr;
+    const [h, m, s] = t.split(":").map(Number);
+    return (h ?? 0) * 60 + (m ?? 0) + (s ?? 0) / 60;
+  }
+
+  const W = 100; // porcentaje
+  const ROW_H = 16;
+  const GAP = 4;
+  const TOTAL_H = channels.length * (ROW_H + GAP) + 24;
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4">
+      <p className="text-slate-400 text-xs font-medium mb-3">📊 Timeline — {date}</p>
+
+      {/* Horas */}
+      <div className="flex justify-between text-slate-600 text-xs mb-1 px-0.5">
+        {[0, 3, 6, 9, 12, 15, 18, 21, 24].map(h => (
+          <span key={h}>{String(h).padStart(2, "0")}h</span>
+        ))}
+      </div>
+
+      <svg viewBox={`0 0 1440 ${TOTAL_H}`} className="w-full" preserveAspectRatio="none"
+        style={{ height: `${Math.max(60, TOTAL_H * 2)}px` }}>
+        {/* Fondo + guías horarias */}
+        <rect x="0" y="0" width="1440" height={TOTAL_H} fill="#1e293b" rx="4" />
+        {[6, 12, 18].map(h => (
+          <line key={h} x1={h * 60} y1="0" x2={h * 60} y2={TOTAL_H}
+            stroke="#334155" strokeWidth="1" strokeDasharray="4,4" />
+        ))}
+
+        {channels.map((ch, rowIdx) => {
+          const y    = rowIdx * (ROW_H + GAP);
+          const color = COLORS[(ch - 1) % COLORS.length]!;
+          return (
+            <g key={ch}>
+              {/* Label canal */}
+              <text x="4" y={y + ROW_H - 3} fontSize="9" fill="#94a3b8">CH{ch}</text>
+              {recordings
+                .filter(r => r.channel === ch)
+                .map((r, i) => {
+                  const x1 = toMinutes(r.start);
+                  const x2 = toMinutes(r.end);
+                  const w  = Math.max(2, x2 - x1);
+                  return (
+                    <rect key={i}
+                      x={x1 * (1440 / (24 * 60))}
+                      y={y}
+                      width={w * (1440 / (24 * 60))}
+                      height={ROW_H}
+                      fill={color}
+                      opacity="0.85"
+                      rx="2"
+                      className="cursor-pointer hover:opacity-100"
+                      onClick={() => onSelectRange(
+                        r.start.split(" ")[1]?.slice(0, 5) ?? "00:00",
+                        r.end.split(" ")[1]?.slice(0, 5) ?? "23:59"
+                      )}
+                    >
+                      <title>CH{ch} · {r.start.split(" ")[1]} → {r.end.split(" ")[1]}</title>
+                    </rect>
+                  );
+                })}
+            </g>
+          );
+        })}
+      </svg>
+      <p className="text-slate-700 text-xs mt-1">Haz clic en un bloque para filtrar ese rango</p>
+    </div>
+  );
+}
+
 function formatBytes(bytes: number): string {
   if (!bytes) return "—";
   const gb = bytes / 1e9;
@@ -35,6 +173,7 @@ export default function DvrRecordingsPage() {
   const [startTime, setStartTime] = useState("00:00");
   const [endTime,   setEndTime]   = useState("23:59");
   const [searched,     setSearched]     = useState(false);
+  const [playbackSrc,  setPlaybackSrc]  = useState<{ src: string; title: string } | null>(null);
   const [localJobId,   setLocalJobId]   = useState<string | null>(null);
   const [localStatus,  setLocalStatus]  = useState<"idle"|"waiting"|"done"|"error">("idle");
   const [localResults, setLocalResults] = useState<{channel:number;start:string;end:string;size:number;filePath:string}[]>([]);
@@ -93,7 +232,17 @@ export default function DvrRecordingsPage() {
     setSelectedChannels(prev => prev.size === 0 || prev.size === channelCount ? new Set() : new Set(allChannels));
   }
 
-  function handleSearch() { setSearched(true); setLocalStatus("idle"); refetch(); }
+  function handleSearch() { setSearched(true); setLocalStatus("idle"); setPlaybackSrc(null); refetch(); }
+
+  function handlePlayback(rec: { channel: number; start: string; end: string }) {
+    // Construir URL de playback via proxy HLS
+    const fmt = (s: string) => s.replace(/[-: ]/g, "").slice(0, 14).padEnd(14, "0");
+    const start = fmt(rec.start);
+    const end   = fmt(rec.end);
+    const src   = `/api/vms/stream/${id}/${rec.channel}/pb/${start}/${end}/index.m3u8`;
+    const title = `CH${rec.channel} · ${rec.start.split(" ")[1] ?? rec.start} → ${rec.end.split(" ")[1] ?? rec.end}`;
+    setPlaybackSrc({ src, title });
+  }
 
   function handleSearchLocal() {
     setSearched(false);
@@ -242,6 +391,22 @@ export default function DvrRecordingsPage() {
               <span className="text-white font-medium">{recordings.length}</span> grabación{recordings.length !== 1 ? "es" : ""} ·{" "}
               {channelLabel} · {date} · {startTime}–{endTime}
             </p>
+
+            {/* Timeline visual */}
+            <RecordingTimeline
+              recordings={recordings as { channel: number; start: string; end: string }[]}
+              date={date}
+              onSelectRange={(s, e) => { setStartTime(s); setEndTime(e); }}
+            />
+
+            {/* Reproductor de playback */}
+            {playbackSrc && (
+              <PlaybackPlayer
+                src={playbackSrc.src}
+                title={playbackSrc.title}
+                onClose={() => setPlaybackSrc(null)}
+              />
+            )}
             <div className="rounded-xl border border-slate-800 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -252,6 +417,7 @@ export default function DvrRecordingsPage() {
                     <th className="text-left text-slate-400 font-medium px-4 py-3">Duración</th>
                     <th className="text-left text-slate-400 font-medium px-4 py-3">Tamaño</th>
                     <th className="text-left text-slate-400 font-medium px-4 py-3">Archivo</th>
+                    <th className="text-left text-slate-400 font-medium px-4 py-3">▶</th>
                     <th className="text-left text-slate-400 font-medium px-4 py-3">Descargar</th>
                   </tr>
                 </thead>
@@ -271,6 +437,14 @@ export default function DvrRecordingsPage() {
                       <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{formatBytes(rec.size)}</td>
                       <td className="px-4 py-3 text-slate-600 text-xs font-mono truncate max-w-[180px]" title={rec.filePath}>
                         {rec.filePath.split("/").pop()}
+                      </td>
+                      <td className="px-4 py-2">
+                        <button
+                          onClick={() => handlePlayback(rec as { channel: number; start: string; end: string })}
+                          title="Reproducir grabación via go2rtc (requiere Live View activo)"
+                          className="bg-slate-700 hover:bg-blue-700 text-white text-xs px-2 py-1.5 rounded-lg transition-colors">
+                          ▶
+                        </button>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
