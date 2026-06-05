@@ -142,6 +142,68 @@ export const vmsRouter = router({
       return { ok: true };
     }),
 
+  // ── Alarmas ──────────────────────────────────────────────────────────────────
+  listAlarms: protectedProcedure
+    .input(z.object({
+      limit:   z.number().int().min(1).max(200).default(50),
+      dvrId:   z.string().optional(),
+      code:    z.string().optional(),
+      onlyNew: z.boolean().default(false),
+    }))
+    .query(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      return prisma.dvrAlarm.findMany({
+        where: {
+          tenantId:     ctx.session.user.tenantId,
+          ...(input.dvrId   ? { dvrId:        input.dvrId }   : {}),
+          ...(input.code    ? { code:          input.code }    : {}),
+          ...(input.onlyNew ? { acknowledged:  false }         : {}),
+        },
+        orderBy: { createdAt: "desc" },
+        take:    input.limit,
+      });
+    }),
+
+  acknowledgeAlarm: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      await prisma.dvrAlarm.updateMany({
+        where: { id: input.id, tenantId: ctx.session.user.tenantId },
+        data:  { acknowledged: true },
+      });
+      return { ok: true };
+    }),
+
+  acknowledgeAll: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      requireAdmin(ctx.session.user.role);
+      const { count } = await prisma.dvrAlarm.updateMany({
+        where: { tenantId: ctx.session.user.tenantId, acknowledged: false },
+        data:  { acknowledged: true },
+      });
+      return { count };
+    }),
+
+  alarmStats: protectedProcedure.query(async ({ ctx }) => {
+    requireAdmin(ctx.session.user.role);
+    const tenantId = ctx.session.user.tenantId;
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000); // últimas 24h
+
+    const [total, unread, byCode] = await Promise.all([
+      prisma.dvrAlarm.count({ where: { tenantId, createdAt: { gte: since } } }),
+      prisma.dvrAlarm.count({ where: { tenantId, acknowledged: false } }),
+      prisma.dvrAlarm.groupBy({
+        by: ["code"],
+        where: { tenantId, createdAt: { gte: since } },
+        _count: { _all: true },
+        orderBy: { _count: { code: "desc" } },
+      }),
+    ]);
+
+    return { total24h: total, unread, byCode: byCode.map(b => ({ code: b.code, count: b._count._all })) };
+  }),
+
   // ── Info del tunnel del agente ───────────────────────────────────────────────
   getTunnel: protectedProcedure.query(async ({ ctx }) => {
     requireAdmin(ctx.session.user.role);

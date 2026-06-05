@@ -35,6 +35,7 @@ model Tenant {
   dvrCredential   DvrCredential?
   dvrScanJobs     DvrScanJob[]
   agentTunnel     AgentTunnel?
+  dvrAlarms       DvrAlarm[]
   monitorTargets  MonitorTarget[]
   monitorChecks   MonitorCheck[]
 
@@ -521,7 +522,8 @@ model Dvr {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant  Tenant     @relation(fields: [tenantId], references: [id])
+  alarms  DvrAlarm[]
 
   @@unique([tenantId, ip])
   @@map("dvrs")
@@ -531,6 +533,30 @@ enum DvrStatus {
   ONLINE
   OFFLINE
   UNKNOWN
+}
+
+// ─── Alarmas de DVR ──────────────────────────────────────────────────────────
+
+model DvrAlarm {
+  id           String   @id @default(cuid())
+  tenantId     String
+  dvrId        String
+  dvrName      String
+  channel      Int
+  code         String                    // VideoMotion, VideoLoss, VideoBlind, AlarmLocal…
+  action       String   @default("Start") // Start | Stop
+  eventData    Json?                     // payload crudo del DVR
+  snapshotUrl  String?                   // foto del momento (R2)
+  ticketId     String?                   // ticket creado automáticamente
+  acknowledged Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  dvr    Dvr    @relation(fields: [dvrId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([dvrId, createdAt(sort: Desc)])
+  @@map("dvr_alarms")
 }
 
 // ─── Tunnel del agente local (go2rtc + cloudflared) ─────────────────────────

@@ -73,6 +73,10 @@ export default function VmsPage() {
             className="text-sm px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors">
             🕹️ PTZ
           </Link>
+          <Link href="/vms/alarms"
+            className="text-sm px-4 py-2 rounded-lg bg-red-900/60 hover:bg-red-800/60 border border-red-800 text-red-300 hover:text-white transition-colors">
+            🚨 Alarmas
+          </Link>
           <Link href="/dvrs"
             className="text-sm px-4 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors">
             ← DVRs

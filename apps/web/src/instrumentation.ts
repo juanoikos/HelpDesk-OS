@@ -14,5 +14,8 @@ export async function register() {
 
     const { startDvrHeartbeat } = await import("./lib/dvr-heartbeat");
     startDvrHeartbeat();
+
+    const { startDvrEventSubscriber } = await import("./lib/dvr-events");
+    startDvrEventSubscriber();
   }
 }
