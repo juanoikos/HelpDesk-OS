@@ -38,6 +38,8 @@ export async function GET(req: NextRequest) {
     ServerUrl:           SERVER_URL,
     AgentToken:          agentToken,
     PollIntervalSeconds: 10,
+    EnableLiveView:      true,
+    LiveViewPort:        1984,
   };
   zip.file("config.json", JSON.stringify(config, null, 2));
 
@@ -48,6 +50,9 @@ export async function GET(req: NextRequest) {
     "",
     "El config.json ya viene configurado con tu servidor y token.",
     "Solo ejecuta DahuaAgent.exe y listo.",
+    "",
+    "Live View activado: al iniciar, el agente descarga go2rtc.exe y cloudflared.exe",
+    "(~40 MB la primera vez) y crea un tunnel HTTPS para acceder a los DVRs locales.",
     "",
     "Requisito: .NET 8 Runtime instalado en esta PC.",
     "Descarga: https://dotnet.microsoft.com/download/dotnet/8.0",
