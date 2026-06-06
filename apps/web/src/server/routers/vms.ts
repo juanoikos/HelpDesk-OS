@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
+﻿import { z } from "zod";
+import { router, protectedProcedure, adminProcedure } from "../trpc";
 import { prisma } from "@helpdesk-os/db";
 import { TRPCError } from "@trpc/server";
 import { isGo2rtcConfigured, streamName, unregisterStream } from "@/lib/go2rtc";
@@ -25,15 +25,11 @@ async function getDvrCreds(dvrId: string, tenantId: string) {
   return { dvr, username, password, ip, httpPort };
 }
 
-function requireAdmin(role: string) {
-  if (role !== "ADMIN") throw new TRPCError({ code: "FORBIDDEN", message: "Solo administradores" });
-}
 
 export const vmsRouter = router({
 
-  // ── Estado del módulo VMS ────────────────────────────────────────────────────
-  status: protectedProcedure.query(async ({ ctx }) => {
-    requireAdmin(ctx.session.user.role);
+  // â”€â”€ Estado del mÃ³dulo VMS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  status: adminProcedure.query(async ({ ctx }) => {
     const tenantId = ctx.session.user.tenantId;
 
     const [dvrs, tunnel] = await Promise.all([
@@ -58,11 +54,11 @@ export const vmsRouter = router({
     };
   }),
 
-  // ── Detener un stream activo ─────────────────────────────────────────────────
-  stopStream: protectedProcedure
+  // â”€â”€ Detener un stream activo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  stopStream: adminProcedure
     .input(z.object({ dvrId: z.string(), channel: z.number().int().min(1) }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       const tenantId = ctx.session.user.tenantId;
 
       const dvr = await prisma.dvr.findFirst({ where: { id: input.dvrId, tenantId }, select: { id: true } });
@@ -78,8 +74,8 @@ export const vmsRouter = router({
       return { ok: true };
     }),
 
-  // ── PTZ ──────────────────────────────────────────────────────────────────────
-  ptzMove: protectedProcedure
+  // â”€â”€ PTZ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  ptzMove: adminProcedure
     .input(z.object({
       dvrId:   z.string(),
       channel: z.number().int().min(1).default(1),
@@ -87,7 +83,7 @@ export const vmsRouter = router({
       speed:   z.number().int().min(1).max(10).default(5),
     }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       const { username, password, ip, httpPort } = await getDvrCreds(input.dvrId, ctx.session.user.tenantId);
       try {
         await ptzStart({ ip, httpPort, username, password, channel: input.channel }, input.code, input.speed);
@@ -97,45 +93,44 @@ export const vmsRouter = router({
       }
     }),
 
-  ptzStop: protectedProcedure
+  ptzStop: adminProcedure
     .input(z.object({ dvrId: z.string(), channel: z.number().int().min(1).default(1) }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       const { username, password, ip, httpPort } = await getDvrCreds(input.dvrId, ctx.session.user.tenantId);
       try { await ptzStop({ ip, httpPort, username, password, channel: input.channel }); }
       catch { /* ignorar error de stop */ }
       return { ok: true };
     }),
 
-  ptzGetPresets: protectedProcedure
+  ptzGetPresets: adminProcedure
     .input(z.object({ dvrId: z.string(), channel: z.number().int().min(1).default(1) }))
     .query(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
       const { username, password, ip, httpPort } = await getDvrCreds(input.dvrId, ctx.session.user.tenantId);
       try { return await getPresets({ ip, httpPort, username, password, channel: input.channel }); }
       catch { return []; }
     }),
 
-  ptzGotoPreset: protectedProcedure
+  ptzGotoPreset: adminProcedure
     .input(z.object({ dvrId: z.string(), channel: z.number().int().min(1).default(1), presetId: z.number() }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       const { username, password, ip, httpPort } = await getDvrCreds(input.dvrId, ctx.session.user.tenantId);
       await gotoPreset({ ip, httpPort, username, password, channel: input.channel }, input.presetId);
       return { ok: true };
     }),
 
-  ptzSetPreset: protectedProcedure
+  ptzSetPreset: adminProcedure
     .input(z.object({ dvrId: z.string(), channel: z.number().int().min(1).default(1), presetId: z.number() }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       const { username, password, ip, httpPort } = await getDvrCreds(input.dvrId, ctx.session.user.tenantId);
       await setPreset({ ip, httpPort, username, password, channel: input.channel }, input.presetId);
       return { ok: true };
     }),
 
-  // ── Alarmas ──────────────────────────────────────────────────────────────────
-  listAlarms: protectedProcedure
+  // â”€â”€ Alarmas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  listAlarms: adminProcedure
     .input(z.object({
       limit:   z.number().int().min(1).max(200).default(50),
       dvrId:   z.string().optional(),
@@ -143,7 +138,6 @@ export const vmsRouter = router({
       onlyNew: z.boolean().default(false),
     }))
     .query(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
       return prisma.dvrAlarm.findMany({
         where: {
           tenantId:     ctx.session.user.tenantId,
@@ -156,10 +150,10 @@ export const vmsRouter = router({
       });
     }),
 
-  acknowledgeAlarm: protectedProcedure
+  acknowledgeAlarm: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       await prisma.dvrAlarm.updateMany({
         where: { id: input.id, tenantId: ctx.session.user.tenantId },
         data:  { acknowledged: true },
@@ -167,9 +161,8 @@ export const vmsRouter = router({
       return { ok: true };
     }),
 
-  acknowledgeAll: protectedProcedure
+  acknowledgeAll: adminProcedure
     .mutation(async ({ ctx }) => {
-      requireAdmin(ctx.session.user.role);
       const { count } = await prisma.dvrAlarm.updateMany({
         where: { tenantId: ctx.session.user.tenantId, acknowledged: false },
         data:  { acknowledged: true },
@@ -177,10 +170,9 @@ export const vmsRouter = router({
       return { count };
     }),
 
-  alarmStats: protectedProcedure.query(async ({ ctx }) => {
-    requireAdmin(ctx.session.user.role);
+  alarmStats: adminProcedure.query(async ({ ctx }) => {
     const tenantId = ctx.session.user.tenantId;
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000); // últimas 24h
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000); // Ãºltimas 24h
 
     const [total, unread, byCode] = await Promise.all([
       prisma.dvrAlarm.count({ where: { tenantId, createdAt: { gte: since } } }),
@@ -196,9 +188,8 @@ export const vmsRouter = router({
     return { total24h: total, unread, byCode: byCode.map(b => ({ code: b.code, count: b._count._all })) };
   }),
 
-  // ── E-Map ────────────────────────────────────────────────────────────────────
-  listEmaps: protectedProcedure.query(async ({ ctx }) => {
-    requireAdmin(ctx.session.user.role);
+  // â”€â”€ E-Map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  listEmaps: adminProcedure.query(async ({ ctx }) => {
     return prisma.eMap.findMany({
       where:   { tenantId: ctx.session.user.tenantId },
       include: { devices: true },
@@ -206,22 +197,22 @@ export const vmsRouter = router({
     });
   }),
 
-  createEmap: protectedProcedure
+  createEmap: adminProcedure
     .input(z.object({ name: z.string().min(1).max(80), imageUrl: z.string().url(), order: z.number().int().default(0) }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       return prisma.eMap.create({ data: { tenantId: ctx.session.user.tenantId, ...input } });
     }),
 
-  deleteEmap: protectedProcedure
+  deleteEmap: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       await prisma.eMap.deleteMany({ where: { id: input.id, tenantId: ctx.session.user.tenantId } });
       return { ok: true };
     }),
 
-  upsertEmapDevice: protectedProcedure
+  upsertEmapDevice: adminProcedure
     .input(z.object({
       emapId:  z.string(),
       dvrId:   z.string(),
@@ -231,7 +222,7 @@ export const vmsRouter = router({
       label:   z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       const emap = await prisma.eMap.findFirst({ where: { id: input.emapId, tenantId: ctx.session.user.tenantId } });
       if (!emap) throw new TRPCError({ code: "NOT_FOUND" });
       return prisma.eMapDevice.upsert({
@@ -241,10 +232,10 @@ export const vmsRouter = router({
       });
     }),
 
-  removeEmapDevice: protectedProcedure
+  removeEmapDevice: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       // Verificar que el dispositivo pertenezca al tenant del usuario
       await prisma.eMapDevice.deleteMany({
         where: { id: input.id, emap: { tenantId: ctx.session.user.tenantId } },
@@ -252,11 +243,10 @@ export const vmsRouter = router({
       return { ok: true };
     }),
 
-  // ── Config remota ─────────────────────────────────────────────────────────────
-  getDeviceConfig: protectedProcedure
+  // â”€â”€ Config remota â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  getDeviceConfig: adminProcedure
     .input(z.object({ dvrId: z.string(), channel: z.number().int().min(1).default(1) }))
     .query(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
       const { username, password, ip, httpPort } = await getDvrCreds(input.dvrId, ctx.session.user.tenantId);
       const [encode, storage] = await Promise.allSettled([
         getEncodeConfig({ ip, port: httpPort, username, password }, input.channel),
@@ -268,21 +258,22 @@ export const vmsRouter = router({
       };
     }),
 
-  rebootDevice: protectedProcedure
+  rebootDevice: adminProcedure
     .input(z.object({ dvrId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       const { username, password, ip, httpPort } = await getDvrCreds(input.dvrId, ctx.session.user.tenantId);
       await rebootDevice({ ip, port: httpPort, username, password });
       return { ok: true };
     }),
 
-  // ── Info del tunnel del agente ───────────────────────────────────────────────
-  getTunnel: protectedProcedure.query(async ({ ctx }) => {
-    requireAdmin(ctx.session.user.role);
+  // â”€â”€ Info del tunnel del agente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  getTunnel: adminProcedure.query(async ({ ctx }) => {
     const tunnel = await prisma.agentTunnel.findUnique({
       where: { tenantId: ctx.session.user.tenantId },
     });
     return tunnel ?? null;
   }),
 });
+
+

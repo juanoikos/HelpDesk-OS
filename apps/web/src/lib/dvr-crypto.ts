@@ -1,5 +1,5 @@
 /**
- * dvr-crypto.ts — Cifrado/descifrado de contraseñas de DVR
+ * dvr-crypto.ts — Cifrado/descifrado de contraseñas de DVR + validación SSRF
  *
  * Usa DVR_ENCRYPTION_KEY (variable independiente).
  * Migración segura: al descifrar, intenta primero con DVR_ENCRYPTION_KEY
@@ -88,4 +88,32 @@ export async function getDvrCreds(
   const httpPort = (dvr.port as number | null) ?? 80;
 
   return { dvr, username, password, ip, httpPort };
+}
+
+// ─── Validación SSRF ─────────────────────────────────────────────────────────
+// Rechaza IPs que podrían apuntar a servicios internos de la infraestructura.
+// Los DVRs en red local (192.168.x.x) son accesibles desde el agente Windows,
+// no desde Railway, así que este check aplica solo a peticiones del servidor.
+
+const BLOCKED_RANGES = [
+  /^127\./,                    // loopback
+  /^0\./,                      // red 0
+  /^169\.254\./,               // link-local (metadata AWS/GCP/Railway)
+  /^::1$/,                     // IPv6 loopback
+  /^fc00:/i,                   // IPv6 unique local
+  /^fe80:/i,                   // IPv6 link-local
+];
+
+export function isSsrfBlockedIp(ip: string): boolean {
+  return BLOCKED_RANGES.some(r => r.test(ip));
+}
+
+/**
+ * Lanza un error si la IP está bloqueada por SSRF.
+ * Usar antes de cualquier fetch() a una IP de DVR en el servidor.
+ */
+export function assertNotSsrf(ip: string): void {
+  if (isSsrfBlockedIp(ip)) {
+    throw new Error(`IP bloqueada por seguridad: ${ip}`);
+  }
 }

@@ -29,8 +29,10 @@ export async function POST(req: NextRequest) {
   catch { return NextResponse.json({ error: "JSON inválido" }, { status: 400 }); }
 
   const { tunnelUrl } = body;
-  if (!tunnelUrl || !tunnelUrl.startsWith("https://")) {
-    return NextResponse.json({ error: "tunnelUrl inválida" }, { status: 400 });
+  // Solo aceptar URLs de Cloudflare Tunnel — previene SSRF por tunnel malicioso
+  const TUNNEL_RE = /^https:\/\/[\w-]+\.trycloudflare\.com$/;
+  if (!tunnelUrl || !TUNNEL_RE.test(tunnelUrl)) {
+    return NextResponse.json({ error: "tunnelUrl inválida — solo se aceptan dominios *.trycloudflare.com" }, { status: 400 });
   }
 
   await prisma.agentTunnel.upsert({

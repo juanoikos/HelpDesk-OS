@@ -1,36 +1,29 @@
-import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
+﻿import { z } from "zod";
+import { router, adminProcedure, protectedProcedure } from "../trpc";
 import { prisma } from "@helpdesk-os/db";
 import { TRPCError } from "@trpc/server";
 import { fetchDeviceInfo, DahuaRPC2Client } from "@helpdesk-os/dahua-sdk";
 import { encrypt, decrypt } from "@/lib/dvr-crypto";
 
-function requireAdmin(role: string) {
-  if (role !== "ADMIN") {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Solo administradores" });
-  }
-}
-
-// ─── Router ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Router â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const dvrsRouter = router({
 
-  // ── Credencial global del tenant ────────────────────────────────────────────
-  getCredential: protectedProcedure.query(async ({ ctx }) => {
-    requireAdmin(ctx.session.user.role);
+  // â”€â”€ Credencial global del tenant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  getCredential: adminProcedure.query(async ({ ctx }) => {
     const cred = await prisma.dvrCredential.findUnique({
       where: { tenantId: ctx.session.user.tenantId },
     });
     return cred ? { username: cred.username, hasPassword: true } : null;
   }),
 
-  saveCredential: protectedProcedure
+  saveCredential: adminProcedure
     .input(z.object({
       username: z.string().min(1).default("admin"),
       password: z.string().min(1),
     }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       const tenantId = ctx.session.user.tenantId;
       return prisma.dvrCredential.upsert({
         where:  { tenantId },
@@ -39,16 +32,15 @@ export const dvrsRouter = router({
       });
     }),
 
-  // ── CRUD DVRs ───────────────────────────────────────────────────────────────
-  list: protectedProcedure.query(async ({ ctx }) => {
-    requireAdmin(ctx.session.user.role);
+  // â”€â”€ CRUD DVRs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  list: adminProcedure.query(async ({ ctx }) => {
     return prisma.dvr.findMany({
       where:   { tenantId: ctx.session.user.tenantId },
       orderBy: [{ location: "asc" }, { name: "asc" }],
     });
   }),
 
-  create: protectedProcedure
+  create: adminProcedure
     .input(z.object({
       name:      z.string().min(1).max(100),
       serial:    z.string().optional(),
@@ -64,7 +56,7 @@ export const dvrsRouter = router({
       photoUrl:  z.string().url().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       const { password, ...rest } = input;
       return prisma.dvr.create({
         data: {
@@ -75,7 +67,7 @@ export const dvrsRouter = router({
       });
     }),
 
-  update: protectedProcedure
+  update: adminProcedure
     .input(z.object({
       id:        z.string(),
       name:      z.string().min(1).max(100).optional(),
@@ -92,7 +84,7 @@ export const dvrsRouter = router({
       photoUrl:  z.string().url().optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       const tenantId = ctx.session.user.tenantId;
       const { id, password, ...data } = input;
       // Verificar pertenencia antes de actualizar (evita el cast peligroso)
@@ -109,10 +101,10 @@ export const dvrsRouter = router({
       });
     }),
 
-  delete: protectedProcedure
+  delete: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       const tenantId = ctx.session.user.tenantId;
       // Verificar pertenencia antes de eliminar
       const existing = await prisma.dvr.findFirst({ where: { id: input.id, tenantId }, select: { id: true } });
@@ -120,9 +112,8 @@ export const dvrsRouter = router({
       return prisma.dvr.delete({ where: { id: input.id } });
     }),
 
-  // ── Dispositivos de red candidatos a DVR (para importar desde scan) ─────────
-  networkCandidates: protectedProcedure.query(async ({ ctx }) => {
-    requireAdmin(ctx.session.user.role);
+  // â”€â”€ Dispositivos de red candidatos a DVR (para importar desde scan) â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  networkCandidates: adminProcedure.query(async ({ ctx }) => {
     const tenantId = ctx.session.user.tenantId;
 
     const [devices, existingDvrs] = await Promise.all([
@@ -150,8 +141,8 @@ export const dvrsRouter = router({
     }));
   }),
 
-  // ── Importación masiva por CSV/JSON ─────────────────────────────────────────
-  bulkImport: protectedProcedure
+  // â”€â”€ ImportaciÃ³n masiva por CSV/JSON â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  bulkImport: adminProcedure
     .input(z.array(z.object({
       name:     z.string().min(1),
       ip:       z.string().min(1),
@@ -160,7 +151,7 @@ export const dvrsRouter = router({
       location: z.string().optional(),
     })))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       const tenantId = ctx.session.user.tenantId;
       let created = 0;
       let skipped = 0;
@@ -173,11 +164,11 @@ export const dvrsRouter = router({
       return { created, skipped };
     }),
 
-  // ── Verificar conectividad de un DVR (auto-detecta puerto) ─────────────────
-  checkStatus: protectedProcedure
+  // â”€â”€ Verificar conectividad de un DVR (auto-detecta puerto) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  checkStatus: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       const dvr = await prisma.dvr.findFirst({
         where: { id: input.id, tenantId: ctx.session.user.tenantId },
       });
@@ -197,9 +188,8 @@ export const dvrsRouter = router({
       return { status, port: foundPort ?? dvr.port };
     }),
 
-  // ── Verificar todos los DVRs del tenant (auto-detecta puertos) ──────────────
-  checkAll: protectedProcedure.mutation(async ({ ctx }) => {
-    requireAdmin(ctx.session.user.role);
+  // â”€â”€ Verificar todos los DVRs del tenant (auto-detecta puertos) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  checkAll: adminProcedure.mutation(async ({ ctx }) => {
     const tenantId = ctx.session.user.tenantId;
     const dvrs     = await prisma.dvr.findMany({ where: { tenantId } });
 
@@ -222,9 +212,9 @@ export const dvrsRouter = router({
     return { total: dvrs.length, online, offline };
   }),
 
-  // ── Buscar grabaciones en un DVR (Dahua HTTP API) ───────────────────────────
-  // channels: array de canales (vacío = todos)
-  findRecordings: protectedProcedure
+  // â”€â”€ Buscar grabaciones en un DVR (Dahua HTTP API) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // channels: array de canales (vacÃ­o = todos)
+  findRecordings: adminProcedure
     .input(z.object({
       dvrId:     z.string(),
       channels:  z.array(z.number().int().min(1)), // [] = todos
@@ -233,7 +223,6 @@ export const dvrsRouter = router({
       endTime:   z.string().default("23:59"), // "HH:MM"
     }))
     .query(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
       const tenantId = ctx.session.user.tenantId;
 
       const [dvr, cred] = await Promise.all([
@@ -260,7 +249,7 @@ export const dvrsRouter = router({
       const end         = `${input.date} ${input.endTime}:59`;
       const authHeader  = buildDigestAuth(username, password);
 
-      // Canales a consultar: array vacío = todos
+      // Canales a consultar: array vacÃ­o = todos
       const channels = input.channels.length === 0
         ? Array.from({ length: dvr.channels }, (_, i) => i + 1)
         : input.channels;
@@ -298,11 +287,11 @@ export const dvrsRouter = router({
       };
     }),
 
-  // ── Obtener info del dispositivo via SDK (modelo, firmware, canales) ─────────
+  // â”€â”€ Obtener info del dispositivo via SDK (modelo, firmware, canales) â”€â”€â”€â”€â”€â”€â”€â”€â”€
   fetchDeviceInfo: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       const tenantId = ctx.session.user.tenantId;
 
       const [dvr, cred] = await Promise.all([
@@ -360,11 +349,11 @@ export const dvrsRouter = router({
       };
     }),
 
-  // ── Snapshot en vivo de un canal ─────────────────────────────────────────────
-  getSnapshotUrl: protectedProcedure
+  // â”€â”€ Snapshot en vivo de un canal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  getSnapshotUrl: adminProcedure
     .input(z.object({ id: z.string(), channel: z.number().int().min(1).default(1) }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       const tenantId = ctx.session.user.tenantId;
 
       const [dvr, cred] = await Promise.all([
@@ -398,8 +387,8 @@ export const dvrsRouter = router({
       }
     }),
 
-  // ── Crear job de scan local ──────────────────────────────────────────────────
-  createScanJob: protectedProcedure
+  // â”€â”€ Crear job de scan local â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  createScanJob: adminProcedure
     .input(z.object({
       dvrId:     z.string(),
       channels:  z.array(z.number().int().min(1)),
@@ -408,7 +397,7 @@ export const dvrsRouter = router({
       endTime:   z.string().default("23:59"),
     }))
     .mutation(async ({ input, ctx }) => {
-      requireAdmin(ctx.session.user.role);
+      
       const tenantId = ctx.session.user.tenantId;
 
       const dvr = await prisma.dvr.findFirst({ where: { id: input.dvrId, tenantId } });
@@ -431,7 +420,7 @@ export const dvrsRouter = router({
       return { jobId: job.id };
     }),
 
-  // ── Consultar resultado de un job ────────────────────────────────────────────
+  // â”€â”€ Consultar resultado de un job â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   getScanJob: protectedProcedure
     .input(z.object({ jobId: z.string() }))
     .query(async ({ input, ctx }) => {
@@ -447,13 +436,13 @@ export const dvrsRouter = router({
     }),
 });
 
-// ─── Auto-detección de puerto ────────────────────────────────────────────────
+// â”€â”€â”€ Auto-detecciÃ³n de puerto â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // Puertos HTTP que usan los DVRs/NVRs Dahua e Hikvision, en orden de preferencia
 const DVR_PORTS = [80, 8080, 8000, 443, 8443, 9000, 81, 82];
 
 async function probePort(ip: string, currentPort: number): Promise<{ port: number | null }> {
-  // Primero prueba el puerto actual (más rápido si ya funcionaba)
+  // Primero prueba el puerto actual (mÃ¡s rÃ¡pido si ya funcionaba)
   const portsToTry = [currentPort, ...DVR_PORTS.filter(p => p !== currentPort)];
 
   for (const port of portsToTry) {
@@ -473,7 +462,7 @@ async function probePort(ip: string, currentPort: number): Promise<{ port: numbe
   return { port: null };
 }
 
-// ─── Helpers Dahua ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers Dahua â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function buildDigestAuth(username: string, password: string): string {
   // Basic auth como primer intento (Dahua acepta ambos)
@@ -501,3 +490,5 @@ function parseDahuaFileFind(text: string, baseUrl: string, channel: number) {
   }
   return recordings;
 }
+
+

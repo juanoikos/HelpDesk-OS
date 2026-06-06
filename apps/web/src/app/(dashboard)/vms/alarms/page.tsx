@@ -1,7 +1,7 @@
 "use client";
 
 import { trpc } from "@/trpc/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 // ─── Configuración visual de tipos de alarma ──────────────────────────────────
@@ -103,6 +103,9 @@ export default function AlarmsPage() {
 
   // ── SSE — recibir alarmas en tiempo real ──────────────────────────────────
   const [realtimeCount, setRealtimeCount] = useState(0);
+  // Usar ref para callbacks — evita que el EventSource se reconecte en cada re-render
+  const cbRef = useRef({ refetchAlarms, refetchStats });
+  useEffect(() => { cbRef.current = { refetchAlarms, refetchStats }; });
 
   useEffect(() => {
     const es = new EventSource("/api/vms/events");
@@ -110,20 +113,15 @@ export default function AlarmsPage() {
     es.onmessage = (e) => {
       if (!e.data || e.data === "connected") return;
       try {
-        const alarm = JSON.parse(e.data);
-        console.log("[alarms] Nueva alarma en tiempo real:", alarm.code);
+        JSON.parse(e.data); // validar JSON
         setRealtimeCount(n => n + 1);
-        refetchAlarms();
-        refetchStats();
+        cbRef.current.refetchAlarms();
+        cbRef.current.refetchStats();
       } catch { /* ignorar */ }
     };
 
-    es.onerror = () => {
-      // SSE reconecta automáticamente
-    };
-
     return () => es.close();
-  }, [refetchAlarms, refetchStats]);
+  }, []); // array vacío — solo abre una vez, usa ref para callbacks
 
   const alarmList = alarms ?? [];
 

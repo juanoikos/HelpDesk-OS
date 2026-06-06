@@ -8,6 +8,7 @@
 
 import { prisma } from "@helpdesk-os/db";
 import { uploadToR2 } from "./r2";
+import { assertNotSsrf } from "./dvr-crypto";
 import { randomUUID } from "crypto";
 
 // ─── Clasificación de eventos ─────────────────────────────────────────────────
@@ -99,6 +100,7 @@ export async function processAlarm(
   let snapshotUrl: string | undefined;
   try {
     const ip   = dvr.localIp ?? dvr.ip;
+    assertNotSsrf(ip); // bloquear metadata endpoints (169.254.x.x, 127.x.x.x)
     const auth = Buffer.from(`${creds.username}:${creds.password}`).toString("base64");
     const ctrl          = new AbortController();
     const snapshotTimer = setTimeout(() => ctrl.abort(), 5000); // fix: siempre limpiar el timer

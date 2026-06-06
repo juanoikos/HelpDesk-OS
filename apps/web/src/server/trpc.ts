@@ -27,5 +27,13 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   });
 });
 
+// Procedimiento solo para administradores — reemplaza requireAdmin() en cada router
+export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.session.user.role !== "ADMIN") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Solo administradores" });
+  }
+  return next({ ctx });
+});
+
 export const router = t.router;
 export const middleware = t.middleware;

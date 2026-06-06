@@ -50,8 +50,10 @@ export default function EmapPage() {
       const res  = await fetch("/api/upload-emap", { method: "POST", body: fd });
       const data = await res.json() as { url?: string; error?: string };
       if (!data.url) { alert(data.error ?? "Error al subir"); return; }
-      createEmap.mutate({ name: newName.trim() || "Plano sin título", imageUrl: data.url });
-    } finally {
+      // Usar mutateAsync para esperar la creación antes de quitar el spinner
+      await createEmap.mutateAsync({ name: newName.trim() || "Plano sin título", imageUrl: data.url });
+    } catch { /* error ya manejado por onError de la mutación */ }
+    finally {
       setUploading(false);
     }
   }

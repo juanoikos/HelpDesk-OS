@@ -10,18 +10,37 @@ const INTERVAL_MS  = 60_000; // 60 segundos
 const PROBE_PORTS  = [80, 8080, 8000, 443, 8443, 9000];
 const TIMEOUT_MS   = 4_000;
 
+const HTTPS_PORTS = new Set([443, 8443]);
+
 async function probeHttp(ip: string, port: number): Promise<boolean> {
   const portsToTry = [port, ...PROBE_PORTS.filter(p => p !== port)];
   for (const p of portsToTry) {
     try {
-      const ctrl = new AbortController();
-      const t    = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-      const res  = await fetch(`http://${ip}:${p}/`, { method: "HEAD", signal: ctrl.signal });
+      const ctrl  = new AbortController();
+      const t     = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+      const proto = HTTPS_PORTS.has(p) ? "https" : "http";
+      const res   = await fetch(`${proto}://${ip}:${p}/`, { method: "HEAD", signal: ctrl.signal });
       clearTimeout(t);
       if (res.status < 600) return true;
     } catch { /* siguiente */ }
   }
   return false;
+}
+
+// Limpiar alarmas y scan jobs antiguos (retención 30 días)
+async function runRetentionCleanup() {
+  try {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [alarms, jobs] = await Promise.all([
+      prisma.dvrAlarm.deleteMany({ where: { createdAt: { lt: cutoff } } }),
+      prisma.dvrScanJob.deleteMany({ where: { createdAt: { lt: cutoff } } }),
+    ]);
+    if (alarms.count > 0 || jobs.count > 0) {
+      console.log(`[dvr-heartbeat] Retención: ${alarms.count} alarmas + ${jobs.count} scan jobs eliminados`);
+    }
+  } catch (err) {
+    console.error("[dvr-heartbeat] Error en retención:", err);
+  }
 }
 
 async function runHeartbeat() {
@@ -62,6 +81,9 @@ export function startDvrHeartbeat() {
   setTimeout(() => {
     runHeartbeat();
     setInterval(runHeartbeat, INTERVAL_MS);
+    // Retención: limpiar datos viejos una vez al día
+    runRetentionCleanup();
+    setInterval(runRetentionCleanup, 24 * 60 * 60 * 1000);
   }, 10_000);
 
   console.log("[dvr-heartbeat] Iniciado — verificando cada 60 segundos");
