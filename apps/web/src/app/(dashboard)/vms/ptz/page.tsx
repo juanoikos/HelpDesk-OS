@@ -32,7 +32,6 @@ function PTZJoystick({
   const move    = trpc.vms.ptzMove.useMutation();
   const stop    = trpc.vms.ptzStop.useMutation();
   const [active, setActive] = useState<PtzCode | null>(null);
-  const holdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const press = useCallback((code: PtzCode) => {
     setActive(code);
@@ -40,7 +39,6 @@ function PTZJoystick({
   }, [dvrId, channel, speed, move]);
 
   const release = useCallback(() => {
-    if (holdRef.current) clearTimeout(holdRef.current);
     setActive(null);
     stop.mutate({ dvrId, channel });
   }, [dvrId, channel, stop]);

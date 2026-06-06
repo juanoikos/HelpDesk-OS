@@ -100,16 +100,20 @@ export async function processAlarm(
   try {
     const ip   = dvr.localIp ?? dvr.ip;
     const auth = Buffer.from(`${creds.username}:${creds.password}`).toString("base64");
-    const ctrl = new AbortController();
-    setTimeout(() => ctrl.abort(), 5000);
-    const res = await fetch(
-      `http://${ip}:${dvr.port}/cgi-bin/snapshot.cgi?channel=${channel}`,
-      { headers: { Authorization: `Basic ${auth}` }, signal: ctrl.signal },
-    );
-    if (res.ok) {
-      const buf = Buffer.from(await res.arrayBuffer());
-      const key = `${dvr.tenantId}/dvr-alarms/${dvr.id}/${randomUUID()}.jpg`;
-      snapshotUrl = await uploadToR2(key, buf, "image/jpeg");
+    const ctrl          = new AbortController();
+    const snapshotTimer = setTimeout(() => ctrl.abort(), 5000); // fix: siempre limpiar el timer
+    try {
+      const res = await fetch(
+        `http://${ip}:${dvr.port}/cgi-bin/snapshot.cgi?channel=${channel}`,
+        { headers: { Authorization: `Basic ${auth}` }, signal: ctrl.signal },
+      );
+      if (res.ok) {
+        const buf = Buffer.from(await res.arrayBuffer());
+        const key = `${dvr.tenantId}/dvr-alarms/${dvr.id}/${randomUUID()}.jpg`;
+        snapshotUrl = await uploadToR2(key, buf, "image/jpeg");
+      }
+    } finally {
+      clearTimeout(snapshotTimer);
     }
   } catch { /* snapshot falla → continuar sin foto */ }
 

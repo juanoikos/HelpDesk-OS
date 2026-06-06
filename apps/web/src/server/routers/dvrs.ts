@@ -2,27 +2,8 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import { prisma } from "@helpdesk-os/db";
 import { TRPCError } from "@trpc/server";
-import crypto from "crypto";
 import { fetchDeviceInfo, DahuaRPC2Client } from "@helpdesk-os/dahua-sdk";
-
-// ─── Cifrado simple AES-256 para contraseñas DVR ────────────────────────────
-const ENC_KEY = (process.env.AUTH_SECRET ?? "helpdesk-dvr-secret-key-32chars!").slice(0, 32);
-const IV_LEN  = 16;
-
-function encrypt(text: string): string {
-  const iv  = crypto.randomBytes(IV_LEN);
-  const c   = crypto.createCipheriv("aes-256-cbc", Buffer.from(ENC_KEY), iv);
-  const enc = Buffer.concat([c.update(text, "utf8"), c.final()]);
-  return iv.toString("hex") + ":" + enc.toString("hex");
-}
-
-function decrypt(text: string): string {
-  const [ivHex, encHex] = text.split(":");
-  const iv  = Buffer.from(ivHex,  "hex");
-  const enc = Buffer.from(encHex, "hex");
-  const d   = crypto.createDecipheriv("aes-256-cbc", Buffer.from(ENC_KEY), iv);
-  return Buffer.concat([d.update(enc), d.final()]).toString("utf8");
-}
+import { encrypt, decrypt } from "@/lib/dvr-crypto";
 
 function requireAdmin(role: string) {
   if (role !== "ADMIN") {
@@ -112,9 +93,13 @@ export const dvrsRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       requireAdmin(ctx.session.user.role);
+      const tenantId = ctx.session.user.tenantId;
       const { id, password, ...data } = input;
+      // Verificar pertenencia antes de actualizar (evita el cast peligroso)
+      const existing = await prisma.dvr.findFirst({ where: { id, tenantId }, select: { id: true } });
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
       return prisma.dvr.update({
-        where: { id, tenantId: ctx.session.user.tenantId } as { id: string },
+        where: { id },
         data: {
           ...data,
           ...(password !== undefined
@@ -128,9 +113,11 @@ export const dvrsRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       requireAdmin(ctx.session.user.role);
-      return prisma.dvr.delete({
-        where: { id: input.id, tenantId: ctx.session.user.tenantId } as { id: string },
-      });
+      const tenantId = ctx.session.user.tenantId;
+      // Verificar pertenencia antes de eliminar
+      const existing = await prisma.dvr.findFirst({ where: { id: input.id, tenantId }, select: { id: true } });
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+      return prisma.dvr.delete({ where: { id: input.id } });
     }),
 
   // ── Dispositivos de red candidatos a DVR (para importar desde scan) ─────────

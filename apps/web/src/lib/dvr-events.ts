@@ -8,6 +8,7 @@
 
 import { prisma } from "@helpdesk-os/db";
 import { processAlarm, type DahuaEvent } from "./alarm-handler";
+import { decrypt } from "./dvr-crypto";
 
 const RECONNECT_BASE_MS = 10_000;
 const RECONNECT_MAX_MS  = 120_000;
@@ -106,32 +107,21 @@ async function subscribeWithReconnect(
 
   while (!globalAbort.aborted) {
     try {
-      // Obtener DVR y credenciales frescas desde DB
-      const [dvr, tenantCred] = await Promise.all([
-        prisma.dvr.findUnique({
-          where:  { id: dvrId },
-          select: { id: true, name: true, tenantId: true, ip: true, port: true, localIp: true,
-                    status: true, username: true, password: true },
-        }),
-        prisma.dvrCredential.findFirst({
-          where:  { tenantId: (await prisma.dvr.findUnique({ where: { id: dvrId }, select: { tenantId: true } }))?.tenantId ?? "" },
-        }),
-      ]);
+      // Obtener DVR primero (con tenantId), luego credencial en paralelo
+      const dvr = await prisma.dvr.findUnique({
+        where:  { id: dvrId },
+        select: { id: true, name: true, tenantId: true, ip: true, port: true, localIp: true,
+                  status: true, username: true, password: true },
+      });
 
       if (!dvr || dvr.status === "OFFLINE") {
         await delay(RECONNECT_MAX_MS, globalAbort);
         continue;
       }
 
-      const ENC_KEY = (process.env.AUTH_SECRET ?? "helpdesk-dvr-secret-key-32chars!").slice(0, 32);
-      const decrypt = (text: string) => {
-        const crypto = require("crypto") as typeof import("crypto");
-        const [ivHex, encHex] = text.split(":");
-        const iv  = Buffer.from(ivHex, "hex");
-        const enc = Buffer.from(encHex, "hex");
-        const d   = crypto.createDecipheriv("aes-256-cbc", Buffer.from(ENC_KEY), iv);
-        return Buffer.concat([d.update(enc), d.final()]).toString("utf8");
-      };
+      const tenantCred = await prisma.dvrCredential.findUnique({
+        where: { tenantId: dvr.tenantId },
+      });
 
       let username: string, password: string;
       if (dvr.username && dvr.password) { username = dvr.username; password = decrypt(dvr.password); }
@@ -179,6 +169,8 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 
 let globalAbortController: AbortController | null = null;
 let started = false;
+// Set de DVR IDs con suscripción activa — previene conexiones duplicadas
+const activeSubscriptions = new Set<string>();
 
 export async function startDvrEventSubscriber(): Promise<void> {
   if (started) return;
@@ -200,11 +192,16 @@ export async function startDvrEventSubscriber(): Promise<void> {
       where:  { status: { not: "OFFLINE" } },
       select: { id: true },
     });
+    let newCount = 0;
     for (const dvr of dvrs) {
-      // Lanzar una tarea por DVR (no await — corren en paralelo)
-      subscribeWithReconnect(dvr.id, signal).catch(() => {});
+      if (activeSubscriptions.has(dvr.id)) continue; // ya suscrito, no duplicar
+      activeSubscriptions.add(dvr.id);
+      newCount++;
+      subscribeWithReconnect(dvr.id, signal)
+        .finally(() => activeSubscriptions.delete(dvr.id))
+        .catch(() => {});
     }
-    console.log(`[dvr-events] Suscrito a ${dvrs.length} DVRs`);
+    if (newCount > 0) console.log(`[dvr-events] +${newCount} DVRs nuevos (total activos: ${activeSubscriptions.size})`);
   }
 
   await refreshAndSubscribe();

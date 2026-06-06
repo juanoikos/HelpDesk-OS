@@ -6,16 +6,7 @@ import { isGo2rtcConfigured, streamName, unregisterStream } from "@/lib/go2rtc";
 import { ptzStart, ptzStop, gotoPreset, setPreset, getPresets,
          getEncodeConfig, rebootDevice, getStorageInfo } from "@helpdesk-os/dahua-sdk";
 import type { PtzCode } from "@helpdesk-os/dahua-sdk";
-import crypto from "crypto";
-
-const ENC_KEY = (process.env.AUTH_SECRET ?? "helpdesk-dvr-secret-key-32chars!").slice(0, 32);
-function decrypt(text: string): string {
-  const [ivHex, encHex] = text.split(":");
-  const iv  = Buffer.from(ivHex,  "hex");
-  const enc = Buffer.from(encHex, "hex");
-  const d   = crypto.createDecipheriv("aes-256-cbc", Buffer.from(ENC_KEY), iv);
-  return Buffer.concat([d.update(enc), d.final()]).toString("utf8");
-}
+import { decrypt } from "@/lib/dvr-crypto";
 
 async function getDvrCreds(dvrId: string, tenantId: string) {
   const [dvr, cred] = await Promise.all([
@@ -254,7 +245,10 @@ export const vmsRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       requireAdmin(ctx.session.user.role);
-      await prisma.eMapDevice.delete({ where: { id: input.id } });
+      // Verificar que el dispositivo pertenezca al tenant del usuario
+      await prisma.eMapDevice.deleteMany({
+        where: { id: input.id, emap: { tenantId: ctx.session.user.tenantId } },
+      });
       return { ok: true };
     }),
 

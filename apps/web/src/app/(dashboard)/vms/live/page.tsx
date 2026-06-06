@@ -199,7 +199,7 @@ export default function LiveViewPage() {
   const [streams, setStreams]  = useState<(StreamSlot | null)[]>([null, null, null, null]);
   const [fullscreen, setFullscreen] = useState<number | null>(null);
 
-  const currentLayout = LAYOUTS.find(l => l.key === layout)!;
+  const currentLayout = LAYOUTS.find(l => l.key === layout) ?? LAYOUTS[1]!;
 
   // Ajustar array de slots al cambiar layout
   useEffect(() => {
@@ -300,7 +300,7 @@ export default function LiveViewPage() {
         {streams.map((slot, i) => {
           const dvrName = dvrs.find(d => d.id === slot?.dvrId)?.name ?? "DVR";
           return (
-            <div key={i} className="relative min-h-[160px] rounded-lg overflow-hidden">
+            <div key={i} className="group relative min-h-[160px] rounded-lg overflow-hidden">
               {slot ? (
                 <>
                   <LivePlayer
@@ -309,10 +309,10 @@ export default function LiveViewPage() {
                     dvrName={dvrName}
                     onClose={() => setSlot(i, null)}
                   />
-                  {/* Botón fullscreen */}
+                  {/* Botón fullscreen — visible al hacer hover sobre la celda */}
                   <button
                     onClick={() => setFullscreen(i)}
-                    className="absolute top-2 right-8 bg-black/60 hover:bg-black/80 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                    className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10">
                     ⛶
                   </button>
                 </>

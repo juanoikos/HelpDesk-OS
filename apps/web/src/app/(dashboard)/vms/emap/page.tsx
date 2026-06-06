@@ -1,7 +1,7 @@
 "use client";
 
 import { trpc } from "@/trpc/react";
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -131,7 +131,7 @@ export default function EmapPage() {
         <div className="flex gap-1 mb-3 overflow-x-auto pb-1">
           {emaps.map(e => (
             <button key={e.id}
-              onClick={() => setActiveEmapId(e.id)}
+              onClick={() => { setActiveEmapId(e.id); setEditMode(false); }}
               className={`shrink-0 text-sm px-4 py-1.5 rounded-lg transition-colors ${
                 (activeEmap?.id === e.id)
                   ? "bg-slate-700 text-white"
@@ -291,27 +291,42 @@ export default function EmapPage() {
 
 function LiveView({ dvrId, channel }: { dvrId: string; channel: number }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { useEffect } = require("react") as typeof import("react");
+  const hlsRef   = useRef<import("hls.js").default | null>(null);
 
   useEffect(() => {
-    let destroyed = false;
-    const src = `/api/vms/stream/${dvrId}/${channel}/index.m3u8`;
+    const src   = `/api/vms/stream/${dvrId}/${channel}/index.m3u8`;
+    const video = videoRef.current;
+    if (!video) return;
+
+    let active = true;
+
     async function init() {
       const Hls = (await import("hls.js")).default;
-      const video = videoRef.current;
-      if (!video || destroyed) return;
+      if (!active || !videoRef.current) return;
+
       if (Hls.isSupported()) {
         const hls = new Hls({ lowLatencyMode: true });
+        hlsRef.current = hls;
         hls.loadSource(src);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => { if (!destroyed) video.play().catch(() => {}); });
-        return () => hls.destroy();
+        hls.attachMedia(videoRef.current);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => { if (active) videoRef.current?.play().catch(() => {}); });
+      } else if (videoRef.current.canPlayType("application/vnd.apple.mpegurl")) {
+        videoRef.current.src = src;
+        videoRef.current.play().catch(() => {});
       }
-      video.src = src;
-      video.play().catch(() => {});
     }
-    const cleanup = init();
-    return () => { destroyed = true; cleanup.then(fn => fn?.()); };
+
+    init();
+
+    return () => {
+      active = false;
+      hlsRef.current?.destroy();
+      hlsRef.current = null;
+      if (videoRef.current) {
+        videoRef.current.src = "";
+        videoRef.current.load();
+      }
+    };
   }, [dvrId, channel]);
 
   return (

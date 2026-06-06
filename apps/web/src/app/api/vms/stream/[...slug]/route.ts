@@ -27,16 +27,7 @@ import {
   getGo2rtcHlsUrl,
 } from "@/lib/go2rtc";
 
-const DECRYPT_KEY = (process.env.AUTH_SECRET ?? "helpdesk-dvr-secret-key-32chars!").slice(0, 32);
-import crypto from "crypto";
-
-function decrypt(text: string): string {
-  const [ivHex, encHex] = text.split(":");
-  const iv  = Buffer.from(ivHex,  "hex");
-  const enc = Buffer.from(encHex, "hex");
-  const d   = crypto.createDecipheriv("aes-256-cbc", Buffer.from(DECRYPT_KEY), iv);
-  return Buffer.concat([d.update(enc), d.final()]).toString("utf8");
-}
+import { decrypt } from "@/lib/dvr-crypto";
 
 export async function GET(
   req: NextRequest,

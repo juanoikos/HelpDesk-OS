@@ -32,8 +32,8 @@ export function buildDahuaRtspUrl(opts: {
 // ─── Nombre del stream en go2rtc ─────────────────────────────────────────────
 
 export function streamName(dvrId: string, channel: number): string {
-  // Nombre único y URL-safe
-  return `dvr_${dvrId.slice(-8)}_ch${channel}`;
+  // Usa 16 chars para evitar colisiones entre DVRs con UUIDs similares
+  return `dvr_${dvrId.replace(/-/g, "").slice(-16)}_ch${channel}`;
 }
 
 // ─── Registrar stream en go2rtc ───────────────────────────────────────────────
@@ -47,8 +47,8 @@ export async function registerStream(
   if (!base) throw new Error("GO2RTC_URL no configurado");
 
   const url = `${base}/api/streams?name=${encodeURIComponent(name)}&src=${encodeURIComponent(rtspUrl)}`;
-  const res = await fetch(url, { method: "PUT" });
-  if (!res.ok && res.status !== 200) {
+  const res = await fetch(url, { method: "PUT", signal: AbortSignal.timeout(5000) });
+  if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error(`go2rtc register error ${res.status}: ${txt}`);
   }

@@ -528,6 +528,7 @@ model Dvr {
   emapDevices EMapDevice[]
 
   @@unique([tenantId, ip])
+  @@index([tenantId])
   @@map("dvrs")
 }
 
