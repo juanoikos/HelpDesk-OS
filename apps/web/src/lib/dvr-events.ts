@@ -114,10 +114,12 @@ async function subscribeWithReconnect(
                   status: true, username: true, password: true },
       });
 
-      if (!dvr || dvr.status === "OFFLINE") {
-        await delay(RECONNECT_MAX_MS, globalAbort);
-        continue;
+      if (!dvr) {
+        // DVR eliminado de la DB — detener esta suscripción
+        break;
       }
+      // No bloquear por status OFFLINE — el heartbeat puede estar equivocado.
+      // Si el DVR es realmente inaccesible, subscribeOnce fallará y el backoff se aplicará.
 
       const tenantCred = await prisma.dvrCredential.findUnique({
         where: { tenantId: dvr.tenantId },

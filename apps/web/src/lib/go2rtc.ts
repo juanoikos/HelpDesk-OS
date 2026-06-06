@@ -36,6 +36,11 @@ export function streamName(dvrId: string, channel: number): string {
   return `dvr_${dvrId.replace(/-/g, "").slice(-16)}_ch${channel}`;
 }
 
+// ─── Registro de streams — Map de peticiones en vuelo ────────────────────────
+// Evita race condition cuando dos pestañas piden el mismo stream simultáneamente
+
+const inFlight = new Map<string, Promise<void>>();
+
 // ─── Registrar stream en go2rtc ───────────────────────────────────────────────
 
 export async function registerStream(
@@ -43,14 +48,29 @@ export async function registerStream(
   rtspUrl: string,
   baseUrl?: string,          // override para tunnels de agente local
 ): Promise<void> {
-  const base = (baseUrl ?? GO2RTC_URL).replace(/\/$/, "");
-  if (!base) throw new Error("GO2RTC_URL no configurado");
+  const key = `${baseUrl ?? ""}::${name}`;
 
-  const url = `${base}/api/streams?name=${encodeURIComponent(name)}&src=${encodeURIComponent(rtspUrl)}`;
-  const res = await fetch(url, { method: "PUT", signal: AbortSignal.timeout(5000) });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`go2rtc register error ${res.status}: ${txt}`);
+  // Si ya hay una petición en vuelo para este stream, esperar a que termine
+  const existing = inFlight.get(key);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    const base = (baseUrl ?? GO2RTC_URL).replace(/\/$/, "");
+    if (!base) throw new Error("GO2RTC_URL no configurado");
+
+    const url = `${base}/api/streams?name=${encodeURIComponent(name)}&src=${encodeURIComponent(rtspUrl)}`;
+    const res = await fetch(url, { method: "PUT", signal: AbortSignal.timeout(5000) });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`go2rtc register error ${res.status}: ${txt}`);
+    }
+  })();
+
+  inFlight.set(key, promise);
+  try {
+    await promise;
+  } finally {
+    inFlight.delete(key);
   }
 }
 

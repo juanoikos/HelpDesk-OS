@@ -9,17 +9,50 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@helpdesk-os/db";
+import crypto from "crypto";
+
+// Rate limiting básico en memoria — máximo 10 requests por IP por minuto
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (entry.count >= 10) return false;
+  entry.count++;
+  return true;
+}
+
+// Comparación en tiempo constante para evitar timing attacks
+function safeTokenCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    // Misma longitud para evitar leak de información
+    crypto.timingSafeEqual(Buffer.from(a), Buffer.from(a));
+    return false;
+  }
+  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 
 export async function POST(req: NextRequest) {
+  // Rate limiting por IP
+  const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  if (!checkRateLimit(clientIp)) {
+    return NextResponse.json({ error: "Demasiadas peticiones" }, { status: 429 });
+  }
+
   const auth = req.headers.get("authorization") ?? "";
   const token = auth.replace("Bearer ", "").trim();
 
   if (!token) return NextResponse.json({ error: "Token requerido" }, { status: 401 });
 
-  const settings = await prisma.tenantSettings.findFirst({
-    where: { agentToken: token },
-    select: { tenantId: true },
+  // Buscar todos los tokens activos para comparación en tiempo constante
+  const allSettings = await prisma.tenantSettings.findMany({
+    select: { tenantId: true, agentToken: true },
   });
+  const settings = allSettings.find(s => s.agentToken && safeTokenCompare(s.agentToken, token));
   if (!settings) return NextResponse.json({ error: "Token inválido" }, { status: 401 });
 
   const tenantId = settings.tenantId;
@@ -51,10 +84,10 @@ export async function DELETE(req: NextRequest) {
   const token = auth.replace("Bearer ", "").trim();
   if (!token) return NextResponse.json({ error: "Token requerido" }, { status: 401 });
 
-  const settings = await prisma.tenantSettings.findFirst({
-    where: { agentToken: token },
-    select: { tenantId: true },
+  const allSettings = await prisma.tenantSettings.findMany({
+    select: { tenantId: true, agentToken: true },
   });
+  const settings = allSettings.find(s => s.agentToken && safeTokenCompare(s.agentToken, token));
   if (!settings) return NextResponse.json({ error: "Token inválido" }, { status: 401 });
 
   await prisma.agentTunnel.updateMany({

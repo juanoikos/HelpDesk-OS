@@ -37,6 +37,18 @@ export const dvrsRouter = router({
     return prisma.dvr.findMany({
       where:   { tenantId: ctx.session.user.tenantId },
       orderBy: [{ location: "asc" }, { name: "asc" }],
+      take:    500,
+      // Excluir contraseñas cifradas — nunca se muestran en la UI
+      select: {
+        id: true, tenantId: true, name: true, serial: true,
+        ip: true, localIp: true, localPort: true, port: true,
+        channels: true, location: true, notes: true, photoUrl: true,
+        deviceModel: true, firmware: true, deviceType: true,
+        channelNames: true, lastInfoFetch: true,
+        status: true, lastChecked: true,
+        createdAt: true, updatedAt: true,
+        // username/password deliberadamente excluidos
+      },
     });
   }),
 
@@ -149,19 +161,26 @@ export const dvrsRouter = router({
       port:     z.number().int().default(80),
       channels: z.number().int().default(8),
       location: z.string().optional(),
-    })))
+    })).max(500))  // límite para evitar payloads que bloqueen el servidor
     .mutation(async ({ input, ctx }) => {
-      
       const tenantId = ctx.session.user.tenantId;
-      let created = 0;
-      let skipped = 0;
-      for (const row of input) {
-        const exists = await prisma.dvr.findFirst({ where: { tenantId, ip: row.ip } });
-        if (exists) { skipped++; continue; }
-        await prisma.dvr.create({ data: { tenantId, ...row } });
-        created++;
+
+      // Obtener IPs existentes en una sola query (en vez de N queries en loop)
+      const existingIps = new Set(
+        (await prisma.dvr.findMany({ where: { tenantId }, select: { ip: true } })).map(d => d.ip)
+      );
+
+      const toCreate = input.filter(row => !existingIps.has(row.ip));
+      const skipped  = input.length - toCreate.length;
+
+      if (toCreate.length > 0) {
+        await prisma.dvr.createMany({
+          data:          toCreate.map(row => ({ tenantId, ...row })),
+          skipDuplicates: true,
+        });
       }
-      return { created, skipped };
+
+      return { created: toCreate.length, skipped };
     }),
 
   // â”€â”€ Verificar conectividad de un DVR (auto-detecta puerto) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

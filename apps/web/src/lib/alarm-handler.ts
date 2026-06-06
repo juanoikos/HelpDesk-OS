@@ -211,14 +211,10 @@ async function createAlarmTicket(
     });
 
     // Crear el primer mensaje del ticket con los detalles de la alarma
-    try {
-      const msgModel = (prisma as unknown as Record<string, { create: (args: unknown) => Promise<unknown> }>).ticketMessage;
-      if (msgModel) {
-        await msgModel.create({
-          data: { ticketId: ticket.id, body, createdById: admin.id },
-        });
-      }
-    } catch { /* campo o modelo con nombre diferente — no crítico */ }
+    // TicketMessage: body + ticketId + userId (no createdById)
+    await prisma.ticketMessage.create({
+      data: { ticketId: ticket.id, body, userId: admin.id },
+    });
 
     console.log(`[alarm] Ticket #${number} creado automáticamente para alarma ${code}`);
     return ticket.id;
