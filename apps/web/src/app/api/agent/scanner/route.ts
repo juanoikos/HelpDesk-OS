@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
 
   const bat = `@echo off
 chcp 65001 >nul
-title HelpDesk OS - Scanner de Red
+title HelpDesk OS - Scanner de Red v2.0
 echo.
 echo  =============================================
 echo   HelpDesk OS - Scanner de Red v1.0
@@ -88,355 +88,378 @@ del "%TMPPS1%" 2>nul
 // ─── Script PowerShell de descubrimiento de red ───────────────────────────────
 const PS1_SCANNER = `
 # ================================================================
-#  HelpDesk OS - Scanner de red v1.0
-#  Descubre todos los dispositivos en la red local
+#  HelpDesk OS - Scanner de red v2.0
+#  Descubre dispositivos en TODAS las subredes locales activas
 #  Ejecuta como Administrador para mejores resultados
 # ================================================================
 
-$API_URL     = "APP_URL_PLACEHOLDER"
-$API_TOKEN   = "TOKEN_PLACEHOLDER"
-$AGENT_VER   = "1.0.0"
-$MAX_THREADS = 50
+$API_URL   = "APP_URL_PLACEHOLDER"
+$API_TOKEN = "TOKEN_PLACEHOLDER"
+$AGENT_VER = "2.0.0"
 
-Write-Host ""
-Write-Host "  HelpDesk OS - Scanner de red" -ForegroundColor Cyan
-Write-Host "  ==============================" -ForegroundColor DarkGray
-Write-Host ""
-
-# ---- Detectar subred local ----
-Write-Host "  Detectando subred local..." -ForegroundColor Yellow
-$localIP = $null
-$subnet  = $null
-
-# Preferir el adaptador con ruta por defecto (LAN real, no Hyper-V/VPN/WSL)
-$defaultRoute = Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue |
-    Sort-Object RouteMetric | Select-Object -First 1
-
-$adapters = $null
-if ($defaultRoute) {
-    $adapters = Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $defaultRoute.InterfaceIndex -ErrorAction SilentlyContinue |
-        Where-Object { $_.IPAddress -notmatch "^127\." } | Select-Object -First 1
+# ── OUI local (prefijos comunes: CCTV, camaras, switches, APs) ────────────────
+# Evita llamadas HTTP por cada dispositivo — solo consulta API para los desconocidos
+$OUI_LOCAL = @{
+    "44:19:B6"="Hikvision";"BC:AD:28"="Hikvision";"00:23:63"="Hikvision"
+    "54:C4:15"="Hikvision";"A4:14:37"="Hikvision";"28:57:BE"="Hikvision"
+    "CC:CE:1E"="Hikvision";"80:71:1F"="Hikvision";"C0:56:E3"="Hikvision"
+    "3C:EF:8C"="Dahua";    "AC:CC:8E"="Dahua";    "E0:50:8B"="Dahua"
+    "90:02:A9"="Dahua";    "B4:A3:82"="Dahua";    "70:85:C2"="Dahua"
+    "00:12:40"="Dahua";    "BC:32:B2"="Dahua"
+    "F4:4D:30"="Uniview";  "00:0C:43"="Uniview"
+    "00:40:8C"="Axis";     "AC:CC:8E"="Axis"
+    "00:09:18"="Hanwha"
+    "24:A4:3C"="Ubiquiti"; "78:8A:20"="Ubiquiti"; "DC:9F:DB"="Ubiquiti"
+    "04:18:D6"="Ubiquiti"; "00:27:22"="Ubiquiti"; "F4:92:BF"="Ubiquiti"
+    "2C:C8:1B"="MikroTik"; "48:8F:5A"="MikroTik"; "74:4D:28"="MikroTik"
+    "E4:8D:8C"="MikroTik"; "D4:CA:6D"="MikroTik"
+    "50:C7:BF"="TP-Link";  "14:91:82"="TP-Link";  "F4:F2:6D"="TP-Link"
+    "F8:1A:67"="TP-Link";  "60:32:B1"="TP-Link";  "98:DE:D0"="TP-Link"
+    "C8:3A:35"="Tenda";    "C4:6E:1F"="Tenda";    "00:0A:EB"="Tenda"
+    "00:09:5B"="Netgear";  "20:E5:2A"="Netgear";  "84:1B:5E"="Netgear"
+    "00:05:5D"="D-Link";   "14:D6:4D"="D-Link";   "90:94:E4"="D-Link"
+    "1C:BD:B9"="D-Link";   "00:1B:11"="D-Link"
+    "04:92:26"="ASUS";     "00:11:2F"="ASUS";     "50:46:5D"="ASUS"
+    "2C:FD:A1"="ASUS";     "AC:22:0B"="ASUS"
+    "00:0C:6E"="Cisco";    "00:1E:BD"="Cisco";    "F8:72:EA"="Cisco"
+    "74:86:E2"="Cisco";    "00:25:B5"="Cisco"
 }
 
-# Fallback: cualquier adaptador no-loopback y no-virtual
-if (-not $adapters) {
-    $adapters = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-        Where-Object {
-            $_.IPAddress -notmatch "^127\." -and
-            $_.PrefixOrigin -ne "WellKnown" -and
-            $_.IPAddress -notmatch "^172\.(1[6-9]|2[0-9]|3[0-1])\."
-        } | Select-Object -First 1
+function Get-OUIVendor {
+    param([string]$mac)
+    if (-not $mac -or $mac -eq "FF:FF:FF:FF:FF:FF") { return $null }
+    $parts  = $mac.ToUpper() -split ":"
+    $prefix = $parts[0] + ":" + $parts[1] + ":" + $parts[2]
+    return $OUI_LOCAL[$prefix]
 }
 
-if ($adapters) {
-    $localIP = $adapters.IPAddress
-    $parts   = $localIP.Split(".")
-    $subnet  = "$($parts[0]).$($parts[1]).$($parts[2])"
+Write-Host ""
+Write-Host "  HelpDesk OS - Scanner de red v2.0" -ForegroundColor Cyan
+Write-Host "  ====================================" -ForegroundColor DarkGray
+Write-Host ""
 
-    # MAC del adaptador local (no aparece en ARP porque es la propia máquina)
-    $localAdapter = Get-NetAdapter -InterfaceIndex $adapters.InterfaceIndex -ErrorAction SilentlyContinue
-    $localMAC = if ($localAdapter) { $localAdapter.MacAddress.Replace("-",":").ToUpper() } else { $null }
+# ── Detectar TODAS las interfaces activas (excluir virtual/loopback) ──────────
+Write-Host "  Detectando interfaces de red..." -ForegroundColor Yellow
 
-    Write-Host "  IP local   : $localIP" -ForegroundColor White
-    Write-Host "  MAC local  : $localMAC" -ForegroundColor White
-    Write-Host "  Subred     : $subnet.0/24" -ForegroundColor White
-} else {
-    Write-Host "  ERROR: No se pudo detectar la subred." -ForegroundColor Red
-    Write-Host "  Presiona Enter para salir..."
-    $null = Read-Host
+$allAddrs = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object {
+        $_.IPAddress -notmatch "^127\." -and
+        $_.IPAddress -notmatch "^169\.254\." -and
+        $_.IPAddress -ne "0.0.0.0" -and
+        $_.PrefixLength -ge 16 -and $_.PrefixLength -le 30
+    }
+
+$activeAdapters = @()
+foreach ($addr in $allAddrs) {
+    $iface = Get-NetAdapter -InterfaceIndex $addr.InterfaceIndex -ErrorAction SilentlyContinue
+    if (-not $iface -or $iface.Status -ne "Up") { continue }
+    $desc = $iface.InterfaceDescription
+    if ($desc -match "Hyper-V|Virtual|VMware|Loopback|Bluetooth|WAN Miniport|6to4|Teredo|isatap|TAP") { continue }
+    $mac = $iface.MacAddress.Replace("-",":").ToUpper()
+    $activeAdapters += [PSCustomObject]@{
+        IP     = $addr.IPAddress
+        Prefix = $addr.PrefixLength
+        MAC    = $mac
+        Name   = $iface.Name
+        Index  = $addr.InterfaceIndex
+    }
+}
+
+if ($activeAdapters.Count -eq 0) {
+    Write-Host "  ERROR: No se encontraron interfaces activas." -ForegroundColor Red
+    Read-Host "  Presiona Enter para salir"
     exit 1
 }
 
-Write-Host ""
-Write-Host "  [1/4] Escaneando red ($subnet.1 - $subnet.254)..." -ForegroundColor Yellow
-Write-Host "        Esto puede tomar 30-60 segundos..." -ForegroundColor DarkGray
-
-# ---- Método 1: Tabla ARP (detecta equipos aunque bloqueen ICMP) ----
-Write-Host "        Leyendo tabla ARP..." -ForegroundColor DarkGray
-$arpRaw   = arp -a 2>$null
-$arpIPs   = @()
-foreach ($line in $arpRaw) {
-    if ($line -match "($([regex]::Escape($subnet))\.\d{1,3})\s") {
-        $ip = $matches[1]
-        if ($ip -notmatch "255$" -and $ip -notmatch "\.0$") { $arpIPs += $ip }
+# Construir lista de subredes /24 unicas a escanear
+$subnets    = @()
+$localIPSet = @{}
+foreach ($a in $activeAdapters) {
+    $p = $a.IP.Split(".")
+    $sn = $p[0] + "." + $p[1] + "." + $p[2]
+    $localIPSet[$a.IP] = $a.MAC
+    if (-not ($subnets | Where-Object { $_.Subnet -eq $sn })) {
+        $subnets += [PSCustomObject]@{ Subnet = $sn; LocalIP = $a.IP; LocalMAC = $a.MAC; Name = $a.Name }
+        Write-Host "  $($a.Name)  $($a.IP)  ->  escaneando $sn.0/24" -ForegroundColor White
     }
 }
-Write-Host "        Hosts en ARP: $($arpIPs.Count)" -ForegroundColor DarkGray
+Write-Host ""
 
-# ---- Método 2: Ping sweep async .NET ----
-Write-Host "        Ping sweep async..." -ForegroundColor DarkGray
-$pingTasks = 1..254 | ForEach-Object {
-    $ip   = "$subnet.$_"
-    $ping = [System.Net.NetworkInformation.Ping]::new()
-    [PSCustomObject]@{ ip = $ip; task = $ping.SendPingAsync($ip, 500); ping = $ping }
+# ── [1/4] Descubrir hosts: ARP + async ping en todas las subredes ─────────────
+Write-Host "  [1/4] Descubriendo hosts en $($subnets.Count) subred(es)..." -ForegroundColor Yellow
+
+$discovered = [System.Collections.Generic.HashSet[string]]::new()
+
+# ARP (detecta equipos que no responden ICMP)
+try {
+    $neighbors = Get-NetNeighbor -AddressFamily IPv4 -ErrorAction Stop |
+        Where-Object { $_.State -notin @("Unreachable","Incomplete") }
+    foreach ($n in $neighbors) {
+        foreach ($s in $subnets) {
+            if ($n.IPAddress -match ("^" + [regex]::Escape($s.Subnet) + "\.")) {
+                $discovered.Add($n.IPAddress) | Out-Null
+            }
+        }
+    }
+} catch {
+    foreach ($line in (arp -a 2>$null)) {
+        foreach ($s in $subnets) {
+            if ($line -match ("(" + [regex]::Escape($s.Subnet) + "\.\d{1,3})")) {
+                $discovered.Add($matches[1]) | Out-Null
+            }
+        }
+    }
+}
+
+# Agregar IPs locales
+foreach ($s in $subnets) { $discovered.Add($s.LocalIP) | Out-Null }
+
+# Ping sweep async en todas las subredes simultaneamente
+$totalIPs = $subnets.Count * 254
+Write-Host "  Ping sweep ($totalIPs IPs en paralelo)..." -ForegroundColor DarkGray
+
+$pingTasks = foreach ($s in $subnets) {
+    $sn = $s.Subnet
+    1..254 | ForEach-Object {
+        $ip   = $sn + "." + $_
+        $ping = [System.Net.NetworkInformation.Ping]::new()
+        [PSCustomObject]@{ ip = $ip; task = $ping.SendPingAsync($ip, 700); ping = $ping }
+    }
 }
 [System.Threading.Tasks.Task]::WaitAll($pingTasks.task)
-$pingIPs = $pingTasks | Where-Object {
-    $_.task.Result.Status -eq [System.Net.NetworkInformation.IPStatus]::Success
-} | ForEach-Object { $_.ping.Dispose(); $_.ip }
-$pingTasks | Where-Object {
-    $_.task.Result.Status -ne [System.Net.NetworkInformation.IPStatus]::Success
-} | ForEach-Object { $_.ping.Dispose() }
-Write-Host "        Hosts via ping: $($pingIPs.Count)" -ForegroundColor DarkGray
-
-# ---- Método 3: Puertos Windows (445/SMB + 135/RPC — siempre abiertos) ----
-Write-Host "        Escaneando puertos Windows 445/135 (detecta equipos sin ping)..." -ForegroundColor DarkGray
-$winTasks = 1..254 | ForEach-Object {
-    $ip   = "$subnet.$_"
-    $tcp1 = [System.Net.Sockets.TcpClient]::new()
-    $tcp2 = [System.Net.Sockets.TcpClient]::new()
-    [PSCustomObject]@{
-        ip    = $ip
-        task1 = $tcp1.ConnectAsync($ip, 445)
-        task2 = $tcp2.ConnectAsync($ip, 135)
-        tcp1  = $tcp1
-        tcp2  = $tcp2
+foreach ($t in $pingTasks) {
+    if ($t.task.Result.Status -eq [System.Net.NetworkInformation.IPStatus]::Success) {
+        $discovered.Add($t.ip) | Out-Null
     }
+    $t.ping.Dispose()
 }
-Start-Sleep -Milliseconds 1200
-$winIPs = $winTasks | Where-Object {
-    ($_.task1.IsCompleted -and $_.tcp1.Connected) -or
-    ($_.task2.IsCompleted -and $_.tcp2.Connected)
-} | ForEach-Object { $_.ip }
-$winTasks | ForEach-Object { try { $_.tcp1.Close(); $_.tcp2.Close() } catch {} }
-Write-Host "        Hosts via puertos Windows: $($winIPs.Count)" -ForegroundColor DarkGray
 
-# ---- Unión de los tres métodos ----
-$activeIPs = ($arpIPs + $pingIPs + $winIPs) | Sort-Object -Unique
-Write-Host "  Hosts activos encontrados: $($activeIPs.Count)" -ForegroundColor Green
+Write-Host "  Hosts descubiertos: $($discovered.Count)" -ForegroundColor Green
 
-# ---- Leer tabla ARP con Get-NetNeighbor (más confiable que arp -a) ----
+# ── [2/4] MACs y fabricantes ──────────────────────────────────────────────────
 Write-Host ""
 Write-Host "  [2/4] Obteniendo MACs y fabricantes..." -ForegroundColor Yellow
 
 $macTable = @{}
-
-# Método primario: Get-NetNeighbor (PowerShell nativo, datos estructurados)
 try {
     Get-NetNeighbor -AddressFamily IPv4 -ErrorAction Stop |
-        Where-Object {
-            $_.State -notin @('Unreachable','Incomplete') -and
-            $_.LinkLayerAddress -notmatch "^00-00-00" -and
-            $_.LinkLayerAddress -ne "FF-FF-FF-FF-FF-FF"
-        } | ForEach-Object {
-            $ip  = $_.IPAddress
-            $mac = $_.LinkLayerAddress.Replace("-",":").ToUpper()
-            $macTable[$ip] = $mac
-        }
-} catch {}
-
-# Fallback: arp -a si Get-NetNeighbor no funciona
-if ($macTable.Count -eq 0) {
+        Where-Object { $_.State -notin @("Unreachable","Incomplete") -and
+                       $_.LinkLayerAddress -notmatch "^00-00-00" -and
+                       $_.LinkLayerAddress -ne "FF-FF-FF-FF-FF-FF" } |
+        ForEach-Object { $macTable[$_.IPAddress] = $_.LinkLayerAddress.Replace("-",":").ToUpper() }
+} catch {
     foreach ($line in (arp -a 2>$null)) {
         if ($line -match "(\d+\.\d+\.\d+\.\d+)\s+([\da-fA-F-]{17})") {
-            $ip  = $matches[1]
-            $mac = $matches[2].Replace("-",":").ToUpper()
-            if ($mac -ne "FF:FF:FF:FF:FF:FF") { $macTable[$ip] = $mac }
+            $macTable[$matches[1]] = $matches[2].Replace("-",":").ToUpper()
         }
     }
 }
+foreach ($ip in $localIPSet.Keys) { $macTable[$ip] = $localIPSet[$ip] }
 
-Write-Host "        MACs encontradas en tabla ARP: $($macTable.Count)" -ForegroundColor DarkGray
-
-# Función para buscar fabricante por MAC
-function Get-Vendor($mac) {
-    if (-not $mac -or $mac -eq "FF:FF:FF:FF:FF:FF") { return "Desconocido" }
-    try {
-        $macClean = $mac.Replace(":", "").Substring(0, 6)
-        $uri      = "https://api.macvendors.com/$mac"
-        $resp     = Invoke-WebRequest -Uri $uri -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
-        Start-Sleep -Milliseconds 500
-        return $resp.Content.Trim()
-    } catch {
-        return "Desconocido"
+# Resolver fabricantes: tabla local primero
+$vendorCache = @{}
+$unknownMACs = [System.Collections.Generic.List[string]]::new()
+foreach ($ip in $discovered) {
+    $mac = $macTable[$ip]
+    if (-not $mac) { continue }
+    $v = Get-OUIVendor $mac
+    if ($v) { $vendorCache[$mac] = $v }
+    elseif (-not $vendorCache.ContainsKey($mac) -and $unknownMACs.Count -lt 25) {
+        $unknownMACs.Add($mac) | Out-Null
     }
 }
 
-# ---- Escanear puertos clave y clasificar ----
+# Consulta API solo para los desconocidos (paralelo, throttled)
+$uniqueUnknown = $unknownMACs | Select-Object -Unique
+if ($uniqueUnknown.Count -gt 0) {
+    Write-Host "  Consultando API para $($uniqueUnknown.Count) fabricantes desconocidos..." -ForegroundColor DarkGray
+    $pool = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspacePool(1, 8)
+    $pool.Open()
+    $vendorJobs = foreach ($m in $uniqueUnknown) {
+        $ps = [System.Management.Automation.PowerShell]::Create()
+        $ps.RunspacePool = $pool
+        $ps.AddScript({
+            param($mac)
+            try {
+                $r = Invoke-WebRequest -Uri ("https://api.macvendors.com/" + $mac) -TimeoutSec 4 -UseBasicParsing -ErrorAction Stop
+                return $r.Content.Trim()
+            } catch { return "" }
+        }).AddArgument($m) | Out-Null
+        [PSCustomObject]@{ mac = $m; ps = $ps; h = $ps.BeginInvoke() }
+    }
+    foreach ($j in $vendorJobs) {
+        try {
+            $v = $j.ps.EndInvoke($j.h) | Select-Object -First 1
+            if ($v) { $vendorCache[$j.mac] = [string]$v }
+        } catch {}
+        $j.ps.Dispose()
+    }
+    $pool.Close(); $pool.Dispose()
+}
+Write-Host "  MACs resueltas: $($vendorCache.Count)" -ForegroundColor DarkGray
+
+# ── [3/4] Escaneo de puertos en paralelo (Runspaces) ─────────────────────────
 Write-Host ""
-Write-Host "  [3/4] Escaneando puertos y clasificando dispositivos..." -ForegroundColor Yellow
+Write-Host "  [3/4] Escaneando puertos en $($discovered.Count) hosts..." -ForegroundColor Yellow
 
 $KEY_PORTS = @(80, 443, 22, 23, 554, 8000, 8080, 8443, 37777, 34567, 5000, 9000)
 
-function Test-Port($ip, $port, $timeoutMs = 400) {
-    try {
-        $tcp = New-Object System.Net.Sockets.TcpClient
-        $ar  = $tcp.BeginConnect($ip, $port, $null, $null)
-        $ok  = $ar.AsyncWaitHandle.WaitOne($timeoutMs, $false)
-        if ($ok -and $tcp.Connected) { $tcp.Close(); return $true }
-        $tcp.Close()
-    } catch {}
-    return $false
+$scanScript = {
+    param([string]$ip, [int[]]$ports, [int]$tms)
+    $open = [System.Collections.Generic.List[int]]::new()
+    foreach ($port in $ports) {
+        try {
+            $tcp = New-Object System.Net.Sockets.TcpClient
+            $ar  = $tcp.BeginConnect($ip, $port, $null, $null)
+            if ($ar.AsyncWaitHandle.WaitOne($tms, $false) -and $tcp.Connected) { $open.Add($port) }
+            try { $tcp.Close() } catch {}
+        } catch {}
+    }
+    $hostname = $null
+    try { $hostname = [string][System.Net.Dns]::GetHostEntry($ip).HostName } catch {}
+    $httpTitle = $null
+    foreach ($hp in @(80, 8080, 8000, 443, 8443)) {
+        if (-not $open.Contains($hp)) { continue }
+        try {
+            $scheme = if ($hp -eq 443 -or $hp -eq 8443) { "https" } else { "http" }
+            $url    = $scheme + "://" + $ip + ":" + $hp
+            $r = Invoke-WebRequest -Uri $url -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
+            if ($r.Content -match "<title[^>]*>([^<]+)</title>") {
+                $t = $matches[1].Trim()
+                $httpTitle = $t.Substring(0, [Math]::Min($t.Length, 60))
+                break
+            }
+        } catch {}
+    }
+    [PSCustomObject]@{ ip = $ip; openPorts = $open.ToArray(); hostname = $hostname; httpTitle = $httpTitle }
 }
 
-function Get-HttpTitle($ip, $port = 80) {
-    try {
-        $scheme = if ($port -eq 443 -or $port -eq 8443) { "https" } else { "http" }
-        $url    = $scheme + "://" + $ip + ":" + $port
-        $resp   = Invoke-WebRequest -Uri $url -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
-        if ($resp.Content -match "<title[^>]*>([^<]+)</title>") {
-            return $matches[1].Trim().Substring(0, [Math]::Min($matches[1].Trim().Length, 60))
-        }
-    } catch {}
-    return $null
+$pool = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspacePool(1, 60)
+$pool.Open()
+$portJobs = foreach ($ip in $discovered) {
+    $ps = [System.Management.Automation.PowerShell]::Create()
+    $ps.RunspacePool = $pool
+    $ps.AddScript($scanScript).AddArgument([string]$ip).AddArgument($KEY_PORTS).AddArgument(500) | Out-Null
+    [PSCustomObject]@{ ps = $ps; h = $ps.BeginInvoke() }
 }
 
-function Get-DeviceType($vendor, $openPorts, $onvif) {
-    $v = $vendor.ToLower()
+$portResults = @{}
+$done = 0
+foreach ($j in $portJobs) {
+    try {
+        $r = $j.ps.EndInvoke($j.h) | Select-Object -First 1
+        if ($r) { $portResults[$r.ip] = $r }
+    } catch {}
+    $j.ps.Dispose()
+    $done++
+    if ($done % 25 -eq 0) { Write-Host "  $done/$($portJobs.Count) escaneados..." -ForegroundColor DarkGray }
+}
+$pool.Close(); $pool.Dispose()
+
+function Get-DeviceType {
+    param([string]$vendor, [int[]]$ports, [bool]$onvif)
     if ($onvif) { return "ip_camera" }
-    if ($v -match "hikvision") {
-        if ($openPorts -contains 8000 -or $openPorts -contains 554) { return "dvr_nvr" }
-        return "ip_camera"
-    }
-    if ($v -match "dahua") {
-        if ($openPorts -contains 37777 -or $openPorts -contains 554) { return "dvr_nvr" }
-        return "ip_camera"
-    }
-    if ($v -match "uniview|hanwha|axis|reolink|annke|amcrest|foscam|vivotek") { return "ip_camera" }
-    if ($openPorts -contains 554) { return "ip_camera" }
-    if ($openPorts -contains 37777 -or $openPorts -contains 34567) { return "dvr_nvr" }
-    if ($v -match "cisco|juniper|extreme") { return "switch" }
+    $v = $vendor.ToLower()
+    if ($v -match "hikvision") { return if ($ports -contains 8000 -or $ports -contains 554) { "dvr_nvr" } else { "ip_camera" } }
+    if ($v -match "dahua")     { return if ($ports -contains 37777 -or $ports -contains 554) { "dvr_nvr" } else { "ip_camera" } }
+    if ($v -match "uniview|hanwha|axis|reolink|amcrest|foscam|vivotek|annke") { return "ip_camera" }
+    if ($ports -contains 37777 -or $ports -contains 34567) { return "dvr_nvr" }
+    if ($ports -contains 554)  { return "ip_camera" }
+    if ($v -match "cisco|juniper|extreme|aruba|hp enterprise") { return "switch" }
     if ($v -match "mikrotik|ubiquiti") { return "router_ap" }
-    if ($v -match "tp-link|netgear|asus|d-link|tenda|mercusys|xiaomi") { return "router_ap" }
-    if ($openPorts -contains 22 -and ($v -match "cisco|hp|dell|aruba")) { return "switch" }
-    if ($openPorts -contains 80 -or $openPorts -contains 443) { return "web_device" }
+    if ($v -match "tp-link|tplink|netgear|asus|d-link|tenda|mercusys|xiaomi") { return "router_ap" }
+    if ($ports -contains 80 -or $ports -contains 443 -or $ports -contains 8080) { return "web_device" }
     return "unknown"
 }
 
 $devices = @()
-$total   = $activeIPs.Count
-$current = 0
-
-foreach ($ipRaw in ($activeIPs | Sort-Object { try { [Version]$_ } catch { $_ } })) {
-    $ip = [string]$ipRaw   # forzar string para evitar System.Version objects
-    $current++
-    Write-Host "  [$current/$total] $ip..." -ForegroundColor DarkGray -NoNewline
-
-    # Para la IP local, tomar MAC del adaptador directamente (no aparece en ARP)
-    $mac = if ($ip -eq $localIP -and $localMAC) {
-        [string]$localMAC
-    } elseif ($macTable.ContainsKey($ip)) {
-        [string]$macTable[$ip]
-    } else { $null }
-    $vendor    = if ($mac) { [string](Get-Vendor $mac) } else { "Desconocido" }
-    $openPorts = [int[]]@()
-
-    foreach ($port in $KEY_PORTS) {
-        if (Test-Port $ip $port) { $openPorts += [int]$port }
-    }
-
-    $httpTitle = $null
-    if ($openPorts -contains 80)   { $httpTitle = Get-HttpTitle $ip 80 }
-    if (-not $httpTitle -and $openPorts -contains 8080) { $httpTitle = Get-HttpTitle $ip 8080 }
-    if (-not $httpTitle -and $openPorts -contains 8000) { $httpTitle = Get-HttpTitle $ip 8000 }
-
-    # Hostname via DNS
-    $hostname = $null
-    try {
-        $dns      = [System.Net.Dns]::GetHostEntry($ip)
-        $hostname = [string]$dns.HostName
-    } catch {}
-
-    $deviceType = [string](Get-DeviceType $vendor $openPorts $false)
+foreach ($ipRaw in ($discovered | Sort-Object { try { [Version]$_ } catch { $_ } })) {
+    $ip      = [string]$ipRaw
+    $mac     = if ($macTable.ContainsKey($ip)) { [string]$macTable[$ip] } else { $null }
+    $vendor  = if ($mac -and $vendorCache.ContainsKey($mac)) { [string]$vendorCache[$mac] } else { "Desconocido" }
+    $pr      = $portResults[$ip]
+    $ports   = if ($pr) { @($pr.openPorts | ForEach-Object { [int]$_ }) } else { @() }
+    $dtype   = [string](Get-DeviceType $vendor $ports $false)
+    $hn      = if ($pr -and $pr.hostname) { [string]$pr.hostname } else { $null }
+    $ht      = if ($pr -and $pr.httpTitle) { [string]$pr.httpTitle } else { $null }
 
     $devices += [PSCustomObject]@{
-        ip         = [string]$ip
-        mac        = if ($mac) { [string]$mac } else { $null }
-        vendor     = [string]$vendor
-        hostname   = if ($hostname) { [string]$hostname } else { $null }
-        deviceType = [string]$deviceType
-        openPorts  = @($openPorts | ForEach-Object { [int]$_ })
-        httpTitle  = if ($httpTitle) { [string]$httpTitle } else { $null }
-        onvif      = $false
+        ip = $ip; mac = $mac; vendor = $vendor; hostname = $hn
+        deviceType = $dtype; openPorts = $ports; httpTitle = $ht; onvif = $false
     }
 
-    $icon = switch ($deviceType) {
-        "dvr_nvr"    { "[DVR/NVR]" }
-        "ip_camera"  { "[CAMARA]" }
-        "switch"     { "[SWITCH]" }
-        "router_ap"  { "[ROUTER]" }
-        "web_device" { "[WEB]" }
-        default      { "[?]" }
+    $col  = if ($dtype -in @("dvr_nvr","ip_camera")) { "Cyan" } else { "DarkGray" }
+    $icon = switch ($dtype) {
+        "dvr_nvr"   { "[DVR]" }; "ip_camera"  { "[CAM]" }; "switch" { "[SW]" }
+        "router_ap" { "[AP]"  }; "web_device"  { "[WEB]" }; default  { "[?]" }
     }
-    Write-Host "  $icon $vendor | ports: $($openPorts -join ',')" -ForegroundColor White
+    Write-Host ("  " + $ip.PadRight(16) + $icon.PadRight(8) + $vendor) -ForegroundColor $col
 }
 
-# ---- ONVIF WS-Discovery ----
+# ── [4/4] ONVIF WS-Discovery en todas las interfaces ─────────────────────────
 Write-Host ""
-Write-Host "  [4/4] Buscando camaras ONVIF..." -ForegroundColor Yellow
+Write-Host "  [4/4] ONVIF WS-Discovery..." -ForegroundColor Yellow
 
-$onvifProbe = '<?xml version="1.0" encoding="UTF-8"?><e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope" xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery" xmlns:dn="http://www.onvif.org/ver10/network/wsdl"><e:Header><w:MessageID>uuid:helpdesk-scanner</w:MessageID><w:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To><w:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action></e:Header><e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types></d:Probe></e:Body></e:Envelope>'
+$onvifProbe = '<?xml version="1.0" encoding="UTF-8"?><e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope" xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery" xmlns:dn="http://www.onvif.org/ver10/network/wsdl"><e:Header><w:MessageID>uuid:helpdesk-scan-2</w:MessageID><w:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To><w:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action></e:Header><e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types></d:Probe></e:Body></e:Envelope>'
+$onvifBytes = [System.Text.Encoding]::UTF8.GetBytes($onvifProbe)
+$mc = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Parse("239.255.255.250"), 3702)
 
-$onvifIPs = @()
+# Enviar probe en cada interfaz activa para cubrir todas las subredes
+foreach ($s in $subnets) {
+    try {
+        $udp = New-Object System.Net.Sockets.UdpClient
+        $local = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Parse($s.LocalIP), 0)
+        $udp.Client.Bind($local)
+        $udp.EnableBroadcast = $true
+        $udp.Send($onvifBytes, $onvifBytes.Length, $mc) | Out-Null
+        $udp.Close()
+    } catch {}
+}
+
+# Recolectar respuestas
 try {
-    $udpClient  = New-Object System.Net.Sockets.UdpClient
-    $udpClient.EnableBroadcast = $true
-    $multicast  = [System.Net.IPAddress]::Parse("239.255.255.250")
-    $udpClient.JoinMulticastGroup($multicast)
-    $endpoint   = New-Object System.Net.IPEndPoint($multicast, 3702)
-    $bytes       = [System.Text.Encoding]::UTF8.GetBytes($onvifProbe)
-    $udpClient.Send($bytes, $bytes.Length, $endpoint) | Out-Null
-
-    $udpClient.Client.ReceiveTimeout = 3000
+    $udpL = New-Object System.Net.Sockets.UdpClient(3702)
+    $udpL.Client.ReceiveTimeout = 3000
     $deadline = (Get-Date).AddSeconds(3)
     while ((Get-Date) -lt $deadline) {
         try {
-            $remoteEP = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
-            $data      = $udpClient.Receive([ref]$remoteEP)
-            $respIP    = $remoteEP.Address.ToString()
-            if ($respIP -notin $onvifIPs -and $respIP -ne $localIP) {
-                $onvifIPs += $respIP
-                Write-Host "  ONVIF encontrado: $respIP" -ForegroundColor Magenta
+            $ep   = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
+            $data = $udpL.Receive([ref]$ep)
+            $ip   = $ep.Address.ToString()
+            if ($localIPSet.ContainsKey($ip)) { continue }
+            $dev  = $devices | Where-Object { $_.ip -eq $ip } | Select-Object -First 1
+            if ($dev) { $dev.onvif = $true; $dev.deviceType = "ip_camera" }
+            else {
+                $devices += [PSCustomObject]@{
+                    ip = $ip; mac = $null; vendor = "Camara ONVIF"; hostname = $null
+                    deviceType = "ip_camera"; openPorts = @(); httpTitle = $null; onvif = $true
+                }
             }
+            Write-Host "  ONVIF: $ip" -ForegroundColor Magenta
         } catch { break }
     }
-    $udpClient.Close()
+    $udpL.Close()
 } catch {}
 
-# Marcar dispositivos ONVIF descubiertos
-foreach ($ipRaw in $onvifIPs) {
-    $ip = [string]$ipRaw
-    $device = $devices | Where-Object { $_.ip -eq $ip } | Select-Object -First 1
-    if ($device) {
-        $device.onvif      = $true
-        $device.deviceType = "ip_camera"
-    } else {
-        $devices += [PSCustomObject]@{
-            ip         = [string]$ip
-            mac        = $null
-            vendor     = "Camara ONVIF"
-            hostname   = $null
-            deviceType = "ip_camera"
-            openPorts  = @()
-            httpTitle  = $null
-            onvif      = $true
-        }
-    }
-}
-
-# ---- Enviar resultados al servidor ----
+# ── Enviar resultados ──────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "  Enviando $($devices.Count) dispositivos a HelpDesk OS..." -ForegroundColor Cyan
 
-$scanStart = Get-Date
+$subnetStr = ($subnets | ForEach-Object { $_.Subnet + ".0/24" }) -join ", "
 $payload = @{
     scannedFrom  = $env:COMPUTERNAME
-    subnet       = "$subnet.0/24"
-    scanDuration = [int]((Get-Date) - $scanStart).TotalSeconds
+    subnet       = $subnetStr
+    scanDuration = 0
     agentVersion = $AGENT_VER
     devices      = $devices
 } | ConvertTo-Json -Depth 5
 
 $headers = @{ "Authorization" = "Bearer $API_TOKEN"; "Content-Type" = "application/json" }
-
 try {
     $resp = Invoke-RestMethod -Uri "$API_URL/api/agent/network-scan" -Method POST -Body $payload -Headers $headers
-    Write-Host ""
-    Write-Host "  OK  Scan completado" -ForegroundColor Green
-    Write-Host "  ->  Dispositivos registrados: $($resp.deviceCount)" -ForegroundColor White
-    Write-Host "  ->  Scan ID: $($resp.scanId)"                        -ForegroundColor DarkGray
+    Write-Host "  OK  Scan completado — $($resp.deviceCount) dispositivos registrados" -ForegroundColor Green
+    Write-Host "  ID: $($resp.scanId)" -ForegroundColor DarkGray
 } catch {
-    Write-Host ""
     Write-Host "  ERROR: $($_.Exception.Message)" -ForegroundColor Red
 }
 
