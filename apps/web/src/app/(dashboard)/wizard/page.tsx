@@ -324,9 +324,10 @@ export default function WizardPage() {
   }
 
   if (method === "claude") {
+    const provider = providers?.gemini ? "gemini" : "claude";
     return (
       <StepDescribe
-        onAnalyze={(description) => analyze.mutate({ description, provider: "claude" })}
+        onAnalyze={(description) => analyze.mutate({ description, provider })}
         onBack={() => setMethod(null)}
         loading={analyze.isPending}
         error={analyze.error ? formatWizardError(analyze.error.message) : undefined}
@@ -337,7 +338,7 @@ export default function WizardPage() {
   return (
     <StepMethod
       onSelect={setMethod}
-      claudeAvailable={providers?.claude ?? false}
+      claudeAvailable={(providers?.claude ?? false) || (providers?.gemini ?? false)}
     />
   );
 }
