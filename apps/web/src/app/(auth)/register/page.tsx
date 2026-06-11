@@ -12,25 +12,37 @@ export default function RegisterPage() {
     setLoading(true);
     setError(null);
 
-    const data = new FormData(e.currentTarget);
-    const res = await fetch("/api/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        companyName: data.get("companyName"),
-        name: data.get("name"),
-        email: data.get("email"),
-        password: data.get("password"),
-      }),
-    });
+    try {
+      const data = new FormData(e.currentTarget);
+      const res = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyName: data.get("companyName"),
+          name: data.get("name"),
+          email: data.get("email"),
+          password: data.get("password"),
+        }),
+      });
 
-    const json = await res.json();
+      let json: { error?: string; ok?: boolean } = {};
+      try {
+        json = await res.json();
+      } catch {
+        setError("Error de servidor. Intenta de nuevo en unos segundos.");
+        setLoading(false);
+        return;
+      }
 
-    if (!res.ok) {
-      setError(json.error ?? "Ocurrió un error. Intenta de nuevo.");
+      if (!res.ok) {
+        setError(json.error ?? "Ocurrió un error. Intenta de nuevo.");
+        setLoading(false);
+      } else {
+        window.location.href = "/login";
+      }
+    } catch {
+      setError("No se pudo conectar al servidor. Verifica tu conexión.");
       setLoading(false);
-    } else {
-      window.location.href = "/login";
     }
   }
 
