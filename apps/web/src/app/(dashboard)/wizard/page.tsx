@@ -324,7 +324,7 @@ export default function WizardPage() {
   }
 
   if (method === "claude") {
-    const provider = providers?.gemini ? "gemini" : "claude";
+    const provider = providers?.groq ? "groq" : providers?.gemini ? "gemini" : "claude";
     return (
       <StepDescribe
         onAnalyze={(description) => analyze.mutate({ description, provider })}
@@ -338,7 +338,7 @@ export default function WizardPage() {
   return (
     <StepMethod
       onSelect={setMethod}
-      claudeAvailable={(providers?.claude ?? false) || (providers?.gemini ?? false)}
+      claudeAvailable={(providers?.groq ?? false) || (providers?.gemini ?? false) || (providers?.claude ?? false)}
     />
   );
 }

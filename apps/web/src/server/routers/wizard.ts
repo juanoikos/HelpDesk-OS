@@ -52,8 +52,27 @@ async function analyzeWithGemini(description: string) {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
   const model = genai.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(AI_PROMPT(description));
-  const text = result.response.text().trim();
+  try {
+    const result = await model.generateContent(AI_PROMPT(description));
+    const text = result.response.text().trim();
+    const clean = text.replace(/^```[a-z]*\n?/, "").replace(/\n?```$/, "");
+    return configSchema.parse(JSON.parse(clean));
+  } catch (err) {
+    console.error("[wizard/gemini] Error completo:", JSON.stringify(err, null, 2));
+    throw err;
+  }
+}
+
+async function analyzeWithGroq(description: string) {
+  const Groq = (await import("groq-sdk")).default;
+  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  const chat = await groq.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    messages: [{ role: "user", content: AI_PROMPT(description) }],
+    max_tokens: 1024,
+    temperature: 0.3,
+  });
+  const text = chat.choices[0]?.message?.content?.trim() ?? "";
   const clean = text.replace(/^```[a-z]*\n?/, "").replace(/\n?```$/, "");
   return configSchema.parse(JSON.parse(clean));
 }
@@ -65,6 +84,7 @@ export const wizardRouter = router({
   availableProviders: protectedProcedure.query(() => ({
     claude: !!process.env.ANTHROPIC_API_KEY,
     gemini: !!process.env.GEMINI_API_KEY,
+    groq:   !!process.env.GROQ_API_KEY,
   })),
 
   // Análisis con IA
@@ -72,18 +92,22 @@ export const wizardRouter = router({
     .input(
       z.object({
         description: z.string().min(20, "Describe tu empresa con al menos 20 caracteres"),
-        provider: z.enum(["claude", "gemini"]).default("claude"),
+        provider: z.enum(["claude", "gemini", "groq"]).default("groq"),
       })
     )
     .mutation(async ({ input }) => {
       try {
-        if (input.provider === "gemini") {
+        if (input.provider === "groq") {
+          if (!process.env.GROQ_API_KEY)
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Falta GROQ_API_KEY" });
+          return await analyzeWithGroq(input.description);
+        } else if (input.provider === "gemini") {
           if (!process.env.GEMINI_API_KEY)
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Falta GEMINI_API_KEY en .env.local" });
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Falta GEMINI_API_KEY" });
           return await analyzeWithGemini(input.description);
         } else {
           if (!process.env.ANTHROPIC_API_KEY)
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Falta ANTHROPIC_API_KEY en .env.local" });
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Falta ANTHROPIC_API_KEY" });
           return await analyzeWithClaude(input.description);
         }
       } catch (err) {
