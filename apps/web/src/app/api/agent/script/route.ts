@@ -261,27 +261,25 @@ try {
         New-Item -ItemType Directory -Path $installDir -Force | Out-Null
     }
 
-    # Guardar este mismo script en la carpeta de instalación
-    $selfContent = Get-Content -Path $MyInvocation.MyCommand.Path -Raw -ErrorAction SilentlyContinue
-    if (-not $selfContent) {
-        # Si se ejecutó desde archivo temporal, guardar el script actual como string
-        $selfContent = $MyInvocation.MyCommand.ScriptBlock.ToString()
-    }
-    Set-Content -Path $agentPath -Value $selfContent -Encoding UTF8 -Force
+    # Descargar el script desde el servidor y guardarlo permanentemente
+    $dlHeaders = @{ "Authorization" = "Bearer $API_TOKEN" }
+    $agentScript = Invoke-RestMethod -Uri "$API_URL/api/agent/script" -Headers $dlHeaders -Method GET
+    Set-Content -Path $agentPath -Value $agentScript -Encoding UTF8 -Force
 
     # Crear/actualizar tarea programada: cada 3 días a las 8am, sin ventana
-    $action   = New-ScheduledTaskAction -Execute "powershell.exe" \`
-                  -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -NonInteractive -File \`"$agentPath\`""
-    $trigger  = New-ScheduledTaskTrigger -Daily -DaysInterval 3 -At "08:00"
-    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 1) \`
-                  -StartWhenAvailable -RunOnlyIfNetworkAvailable
+    $action    = New-ScheduledTaskAction -Execute "powershell.exe" \`
+                   -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -NonInteractive -File \`"$agentPath\`""
+    $trigger   = New-ScheduledTaskTrigger -Daily -DaysInterval 3 -At "08:00"
+    $settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 1) \`
+                   -StartWhenAvailable -RunOnlyIfNetworkAvailable
     $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
 
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger \`
         -Settings $settings -Principal $principal -Force | Out-Null
 
     Write-Host "  OK  Tarea programada instalada (cada 3 dias, automatica)" -ForegroundColor Green
-    Write-Host "      $installDir" -ForegroundColor DarkGray
+    Write-Host "      Archivo : $agentPath"                                  -ForegroundColor DarkGray
+    Write-Host "      Tarea   : $taskName"                                   -ForegroundColor DarkGray
 } catch {
     Write-Host "  AVISO: No se pudo instalar tarea programada: $($_.Exception.Message)" -ForegroundColor DarkYellow
     Write-Host "         Ejecuta como Administrador para activar actualizaciones automaticas." -ForegroundColor DarkYellow
