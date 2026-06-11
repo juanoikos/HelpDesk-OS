@@ -78,8 +78,8 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      {/* Hoja de ruta */}
-      <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
+      {/* Hoja de ruta — solo visible para el tenant desarrollador */}
+      {session.user.tenantSlug === "d-c-computer-sas" && <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
         <h2 className="text-white font-semibold mb-1">Hoja de ruta</h2>
         <p className="text-slate-500 text-xs mb-5">Estado real del sistema al {new Date().toLocaleDateString("es-CO", { day: "2-digit", month: "long", year: "numeric" })}</p>
 
@@ -140,7 +140,7 @@ export default async function DashboardPage() {
             </div>
           ))}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
