@@ -420,6 +420,39 @@ function HardwareDetail({ asset, onClose }: { asset: ReturnType<typeof useAssetD
             </section>
           )}
 
+          {/* Monitores */}
+          {hw?.monitors && Array.isArray(hw.monitors) && hw.monitors.length > 0 && (
+            <section>
+              <h3 className="text-slate-400 text-xs uppercase tracking-wider mb-3">Monitores ({hw.monitors.length})</h3>
+              <div className="space-y-2">
+                {hw.monitors.map((m: Record<string, unknown>, i: number) => (
+                  <div key={i} className="bg-slate-800 rounded-lg px-4 py-3">
+                    <p className="text-slate-200 text-sm">{String(m.name || m.manufacturer || "Monitor desconocido")}</p>
+                    <div className="flex gap-4 mt-1 flex-wrap">
+                      {m.manufacturer && <span className="text-slate-500 text-xs">Marca: <span className="text-slate-300">{String(m.manufacturer)}</span></span>}
+                      {m.serial && <span className="text-slate-500 text-xs">Serial: <span className="text-slate-300 font-mono">{String(m.serial)}</span></span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Mouse */}
+          {hw?.mice && Array.isArray(hw.mice) && hw.mice.length > 0 && (
+            <section>
+              <h3 className="text-slate-400 text-xs uppercase tracking-wider mb-3">Mouse / Apuntador</h3>
+              <div className="space-y-2">
+                {hw.mice.map((m: Record<string, unknown>, i: number) => (
+                  <div key={i} className="bg-slate-800 rounded-lg px-4 py-3 flex justify-between items-center">
+                    <span className="text-slate-200 text-sm">{String(m.name ?? "Mouse desconocido")}</span>
+                    {m.manufacturer && <span className="text-slate-500 text-xs">{String(m.manufacturer)}</span>}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* USB */}
           {hw?.usb && Array.isArray(hw.usb) && hw.usb.length > 0 && (
             <section>

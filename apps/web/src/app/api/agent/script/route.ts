@@ -105,10 +105,11 @@ $AGENT_VER = "1.1.0"
 Write-Host ""
 Write-Host "  HelpDesk OS - Agente de inventario" -ForegroundColor Cyan
 Write-Host "  ===================================" -ForegroundColor DarkGray
+Write-Host "  Version 1.2 - Con monitores y mouse" -ForegroundColor DarkGray
 Write-Host ""
 
-# ---- [1/8] Sistema operativo ----
-Write-Host "  [1/8] Sistema operativo..." -ForegroundColor Yellow
+# ---- [1/10] Sistema operativo ----
+Write-Host "  [1/10] Sistema operativo..." -ForegroundColor Yellow
 $os = Get-CimInstance Win32_OperatingSystem
 $osCaption = $os.Caption
 $osBuild   = $os.BuildNumber
@@ -116,8 +117,8 @@ $osVer     = $os.Version
 $osArch    = $os.OSArchitecture
 $osName    = "$osCaption build $osBuild"
 
-# ---- [2/8] Procesador ----
-Write-Host "  [2/8] Procesador..." -ForegroundColor Yellow
+# ---- [2/10] Procesador ----
+Write-Host "  [2/10] Procesador..." -ForegroundColor Yellow
 $cpuRaw   = Get-CimInstance Win32_Processor | Select-Object -First 1
 $cpuName  = $cpuRaw.Name.Trim()
 $cpuCores = $cpuRaw.NumberOfCores
@@ -126,8 +127,8 @@ $cpuGHz   = [math]::Round($cpuMHz / 1000, 1)
 $cpu      = "$cpuName - $cpuCores nucleos a $cpuGHz GHz"
 $cpuData  = @{ name = $cpuName; cores = $cpuCores; threads = $cpuRaw.NumberOfLogicalProcessors; mhz = $cpuMHz; id = $cpuRaw.ProcessorId }
 
-# ---- [3/8] Memoria RAM ----
-Write-Host "  [3/8] Memoria RAM..." -ForegroundColor Yellow
+# ---- [3/10] Memoria RAM ----
+Write-Host "  [3/10] Memoria RAM..." -ForegroundColor Yellow
 $ramModules = @(Get-CimInstance Win32_PhysicalMemory)
 $ramTotalGB = [math]::Round(($ramModules | Measure-Object -Property Capacity -Sum).Sum / 1GB, 0)
 $ramData = $ramModules | ForEach-Object {
@@ -135,8 +136,8 @@ $ramData = $ramModules | ForEach-Object {
     @{ sizeGB = $sizeGB; manufacturer = $_.Manufacturer; partNumber = $_.PartNumber.Trim(); serial = $_.SerialNumber.Trim(); speed = $_.Speed }
 }
 
-# ---- [4/8] Discos ----
-Write-Host "  [4/8] Discos..." -ForegroundColor Yellow
+# ---- [4/10] Discos ----
+Write-Host "  [4/10] Discos..." -ForegroundColor Yellow
 $disksRaw  = @(Get-CimInstance Win32_DiskDrive)
 $firstDisk = $disksRaw | Select-Object -First 1
 $diskSizeGB = [math]::Round($firstDisk.Size / 1GB, 0)
@@ -146,33 +147,53 @@ $disksData = $disksRaw | ForEach-Object {
     @{ model = $_.Model.Trim(); sizeGB = $sizeGB; serial = $_.SerialNumber.Trim(); mediaType = $_.MediaType; interface = $_.InterfaceType }
 }
 
-# ---- [5/8] Placa madre ----
-Write-Host "  [5/8] Placa madre..." -ForegroundColor Yellow
+# ---- [5/10] Placa madre ----
+Write-Host "  [5/10] Placa madre..." -ForegroundColor Yellow
 $mbRaw       = Get-CimInstance Win32_BaseBoard
 $motherboard = "$($mbRaw.Manufacturer.Trim()) $($mbRaw.Product.Trim())"
 $biosRaw     = Get-CimInstance Win32_BIOS
 $mbData      = @{ manufacturer = $mbRaw.Manufacturer.Trim(); product = $mbRaw.Product.Trim(); serial = $mbRaw.SerialNumber.Trim() }
 $biosData    = @{ manufacturer = $biosRaw.Manufacturer; version = $biosRaw.SMBIOSBIOSVersion; serial = $biosRaw.SerialNumber }
 
-# ---- [6/8] Tarjeta grafica ----
-Write-Host "  [6/8] Tarjeta grafica..." -ForegroundColor Yellow
+# ---- [6/10] Tarjeta grafica ----
+Write-Host "  [6/10] Tarjeta grafica..." -ForegroundColor Yellow
 $gpuData = @(Get-CimInstance Win32_VideoController) | ForEach-Object {
     $vramMB = [math]::Round($_.AdapterRAM / 1MB, 0)
     @{ name = $_.Name; vramMB = $vramMB; driver = $_.DriverVersion }
 }
 
-# ---- [7/8] Red ----
-Write-Host "  [7/8] Red..." -ForegroundColor Yellow
+# ---- [7/10] Red ----
+Write-Host "  [7/10] Red..." -ForegroundColor Yellow
 $netRaw     = @(Get-CimInstance Win32_NetworkAdapterConfiguration | Where-Object { $_.IPEnabled -eq $true -and $_.DefaultIPGateway })
 $ipAddress  = if ($netRaw.Count -gt 0) { $netRaw[0].IPAddress | Select-Object -First 1 } else { "" }
 $macAddress = if ($netRaw.Count -gt 0) { $netRaw[0].MACAddress } else { "" }
 
-# ---- [8/8] USB ----
-Write-Host "  [8/8] Dispositivos USB..." -ForegroundColor Yellow
+# ---- [8/10] USB ----
+Write-Host "  [8/10] Dispositivos USB..." -ForegroundColor Yellow
 $usbData = try {
     @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue |
         Where-Object { $_.Class -in @("USB","HIDClass","Keyboard","Mouse","Printer","Image") } |
         ForEach-Object { @{ name = $_.FriendlyName; class = $_.Class; status = $_.Status.ToString() } })
+} catch { @() }
+
+# ---- [9/10] Monitores ----
+Write-Host "  [9/10] Monitores..." -ForegroundColor Yellow
+$monitorsData = try {
+    $wmiMonitors = @(Get-CimInstance WmiMonitorID -Namespace root\\wmi -ErrorAction SilentlyContinue)
+    $wmiMonitors | ForEach-Object {
+        $name   = ($_.UserFriendlyName  | Where-Object { $_ -gt 0 } | ForEach-Object { [char]$_ }) -join ""
+        $mfg    = ($_.ManufacturerName  | Where-Object { $_ -gt 0 } | ForEach-Object { [char]$_ }) -join ""
+        $serial = ($_.SerialNumberID    | Where-Object { $_ -gt 0 } | ForEach-Object { [char]$_ }) -join ""
+        @{ name = $name.Trim(); manufacturer = $mfg.Trim(); serial = $serial.Trim() }
+    }
+} catch { @() }
+
+# ---- [10/10] Mouse / Apuntador ----
+Write-Host "  [10/10] Mouse..." -ForegroundColor Yellow
+$miceData = try {
+    @(Get-CimInstance Win32_PointingDevice -ErrorAction SilentlyContinue) | ForEach-Object {
+        @{ name = $_.Name; manufacturer = $_.Manufacturer; hardwareType = $_.HardwareType }
+    }
 } catch { @() }
 
 # ---- Tipo de equipo ----
@@ -189,6 +210,8 @@ $hwData = @{
     gpu         = $gpuData
     network     = @{ ip = $ipAddress; mac = $macAddress }
     usb         = $usbData
+    monitors    = $monitorsData
+    mice        = $miceData
     os          = @{ name = $osCaption; version = $osVer; build = $osBuild; arch = $osArch }
 }
 
