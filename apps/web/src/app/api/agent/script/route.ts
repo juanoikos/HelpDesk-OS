@@ -99,6 +99,9 @@ $API_URL   = "APP_URL_PLACEHOLDER"
 $API_TOKEN = "TOKEN_PLACEHOLDER"
 $AGENT_VER = "1.1.0"
 
+# Forzar TLS 1.2 (requerido en Windows 7/8/Server 2012 y algunos Win10 viejos)
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 Write-Host ""
 Write-Host "  HelpDesk OS - Agente de inventario" -ForegroundColor Cyan
 Write-Host "  ===================================" -ForegroundColor DarkGray
