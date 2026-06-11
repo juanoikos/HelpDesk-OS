@@ -97,7 +97,7 @@ const PS1_TEMPLATE = `
 
 $API_URL   = "APP_URL_PLACEHOLDER"
 $API_TOKEN = "TOKEN_PLACEHOLDER"
-$AGENT_VER = "1.1.0"
+$AGENT_VER = "1.2.0"
 
 # Forzar TLS 1.2 (requerido en Windows 7/8/Server 2012 y algunos Win10 viejos)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -105,7 +105,7 @@ $AGENT_VER = "1.1.0"
 Write-Host ""
 Write-Host "  HelpDesk OS - Agente de inventario" -ForegroundColor Cyan
 Write-Host "  ===================================" -ForegroundColor DarkGray
-Write-Host "  Version 1.2 - Con monitores y mouse" -ForegroundColor DarkGray
+Write-Host "  Version 1.2 - Monitores, mouse y tarea automatica" -ForegroundColor DarkGray
 Write-Host ""
 
 # ---- [1/10] Sistema operativo ----
@@ -246,6 +246,45 @@ try {
     Write-Host ""
     Write-Host "  ERROR: $($_.Exception.Message)"         -ForegroundColor Red
     Write-Host "  Verifica tu conexion a internet."       -ForegroundColor Yellow
+}
+
+Write-Host ""
+
+# ---- Instalar tarea programada (cada 3 días, silenciosa) ----
+try {
+    $taskName   = "HelpDesk OS - Inventario"
+    $installDir = "$env:ProgramData\\HelpDeskOS"
+    $agentPath  = "$installDir\\agent.ps1"
+
+    # Crear carpeta si no existe
+    if (-not (Test-Path $installDir)) {
+        New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+    }
+
+    # Guardar este mismo script en la carpeta de instalación
+    $selfContent = Get-Content -Path $MyInvocation.MyCommand.Path -Raw -ErrorAction SilentlyContinue
+    if (-not $selfContent) {
+        # Si se ejecutó desde archivo temporal, guardar el script actual como string
+        $selfContent = $MyInvocation.MyCommand.ScriptBlock.ToString()
+    }
+    Set-Content -Path $agentPath -Value $selfContent -Encoding UTF8 -Force
+
+    # Crear/actualizar tarea programada: cada 3 días a las 8am, sin ventana
+    $action   = New-ScheduledTaskAction -Execute "powershell.exe" \`
+                  -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -NonInteractive -File \`"$agentPath\`""
+    $trigger  = New-ScheduledTaskTrigger -Daily -DaysInterval 3 -At "08:00"
+    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 1) \`
+                  -StartWhenAvailable -RunOnlyIfNetworkAvailable
+    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
+
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger \`
+        -Settings $settings -Principal $principal -Force | Out-Null
+
+    Write-Host "  OK  Tarea programada instalada (cada 3 dias, automatica)" -ForegroundColor Green
+    Write-Host "      $installDir" -ForegroundColor DarkGray
+} catch {
+    Write-Host "  AVISO: No se pudo instalar tarea programada: $($_.Exception.Message)" -ForegroundColor DarkYellow
+    Write-Host "         Ejecuta como Administrador para activar actualizaciones automaticas." -ForegroundColor DarkYellow
 }
 
 Write-Host ""
