@@ -457,3 +457,44 @@ export async function notifyResolved(t: TicketBasic, solution: string) {
     `),
   }).catch(console.error);
 }
+
+// ─── Reset de contraseña ──────────────────────────────────────────────────────
+
+export async function sendPasswordReset({
+  email,
+  name,
+  token,
+}: {
+  email: string;
+  name: string;
+  token: string;
+}) {
+  const resetUrl = `${APP_URL()}/reset-password/${token}`;
+  await getResend().emails.send({
+    from: FROM(),
+    to: email,
+    subject: "HelpDesk OS — Restablece tu contraseña",
+    html: baseHtml(`
+      <h2 style="color:#e2e8f0;font-size:20px;font-weight:700;margin:0 0 8px">Restablece tu contraseña</h2>
+      <p style="color:#94a3b8;font-size:14px;margin:0 0 16px;line-height:1.6">
+        Hola <strong style="color:#e2e8f0">${name}</strong>,<br>
+        recibimos una solicitud para restablecer la contraseña de tu cuenta.
+        Haz clic en el botón para crear una nueva. El enlace vence en <strong style="color:#e2e8f0">1 hora</strong>.
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 20px">
+        <tr>
+          <td align="center">
+            <a href="${resetUrl}"
+               style="display:inline-block;background:#2563eb;color:#fff;font-weight:600;font-size:14px;padding:12px 28px;border-radius:8px;text-decoration:none">
+              Restablecer contraseña
+            </a>
+          </td>
+        </tr>
+      </table>
+      <p style="color:#64748b;font-size:12px;margin:0;line-height:1.6">
+        Si no solicitaste este cambio, ignora este correo. Tu contraseña no cambiará.<br>
+        O copia este enlace en tu navegador: <span style="color:#94a3b8">${resetUrl}</span>
+      </p>
+    `),
+  }).catch(console.error);
+}

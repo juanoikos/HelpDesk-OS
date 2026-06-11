@@ -630,3 +630,17 @@ model DvrScanJob {
 
   @@map("dvr_scan_jobs")
 }
+
+// ─── Tokens de reset de contraseña ───────────────────────────────────────────
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  email     String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@map("password_reset_tokens")
+}

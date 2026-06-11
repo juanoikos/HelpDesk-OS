@@ -13,18 +13,23 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const data = new FormData(e.currentTarget);
-    const result = await signIn("credentials", {
-      email: data.get("email"),
-      password: data.get("password"),
-      redirect: false,
-    });
+    try {
+      const data = new FormData(e.currentTarget);
+      const result = await signIn("credentials", {
+        email: data.get("email"),
+        password: data.get("password"),
+        redirect: false,
+      });
 
-    if (result?.error) {
-      setError("Correo o contraseña incorrectos");
+      if (result?.error) {
+        setError("Correo o contraseña incorrectos");
+        setLoading(false);
+      } else {
+        window.location.href = "/dashboard";
+      }
+    } catch {
+      setError("No se pudo conectar al servidor. Intenta de nuevo.");
       setLoading(false);
-    } else {
-      window.location.href = "/dashboard";
     }
   }
 
@@ -91,6 +96,15 @@ export default function LoginPage() {
           >
             {loading ? "Iniciando sesión..." : "Iniciar sesión"}
           </button>
+
+          <div className="text-center">
+            <Link
+              href="/forgot-password"
+              className="text-slate-400 hover:text-slate-300 text-xs transition-colors"
+            >
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </div>
         </form>
       </div>
 
