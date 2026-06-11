@@ -51,7 +51,7 @@ async function analyzeWithClaude(description: string) {
 async function analyzeWithGemini(description: string) {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-  const model = genai.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = genai.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent(AI_PROMPT(description));
   const text = result.response.text().trim();
   const clean = text.replace(/^```[a-z]*\n?/, "").replace(/\n?```$/, "");
