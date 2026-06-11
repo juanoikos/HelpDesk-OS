@@ -7,6 +7,18 @@ import Link from "next/link";
 
 type Method = "claude" | "template" | null;
 
+function formatWizardError(msg: string): string {
+  if (msg.includes("credit balance is too low"))
+    return "El servicio de IA no tiene créditos disponibles en este momento. Contacta al administrador.";
+  if (msg.includes("invalid_api_key") || msg.includes("authentication"))
+    return "La clave de IA no está configurada correctamente. Contacta al administrador.";
+  if (msg.includes("rate_limit") || msg.includes("429"))
+    return "Demasiadas solicitudes. Espera un momento e intenta de nuevo.";
+  if (msg.includes("overloaded") || msg.includes("529"))
+    return "El servicio de IA está saturado en este momento. Intenta de nuevo en unos minutos.";
+  return "Error al conectar con la IA. Intenta de nuevo o usa una plantilla.";
+}
+
 // ─── Canales disponibles ──────────────────────────────────────────────────────
 
 const ALL_CHANNELS = [
@@ -317,7 +329,7 @@ export default function WizardPage() {
         onAnalyze={(description) => analyze.mutate({ description, provider: "claude" })}
         onBack={() => setMethod(null)}
         loading={analyze.isPending}
-        error={analyze.error?.message}
+        error={analyze.error ? formatWizardError(analyze.error.message) : undefined}
       />
     );
   }
