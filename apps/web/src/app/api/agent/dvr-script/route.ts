@@ -3,7 +3,9 @@ import { auth } from "@/auth";
 import { prisma } from "@helpdesk-os/db";
 import crypto from "crypto";
 
-const ENC_KEY = (process.env.AUTH_SECRET ?? "helpdesk-dvr-secret-key-32chars!").slice(0, 32);
+const _secret = process.env.DVR_ENCRYPTION_KEY ?? process.env.AUTH_SECRET;
+if (!_secret) throw new Error("DVR_ENCRYPTION_KEY o AUTH_SECRET debe estar configurado");
+const ENC_KEY = _secret.slice(0, 32);
 function decrypt(text: string): string {
   const [ivHex, encHex] = text.split(":");
   const iv  = Buffer.from(ivHex, "hex");

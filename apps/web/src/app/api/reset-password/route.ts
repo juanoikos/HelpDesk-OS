@@ -1,14 +1,23 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@helpdesk-os/db";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { rateLimit } from "@/lib/rate-limit";
 
 const schema = z.object({
   token: z.string().min(1),
   password: z.string().min(8, "Mínimo 8 caracteres"),
 });
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? "unknown";
+  if (!rateLimit(ip, "reset-password", 5, 15 * 60 * 1000)) {
+    return NextResponse.json(
+      { error: "Demasiados intentos. Espera 15 minutos." },
+      { status: 429 }
+    );
+  }
+
   const body = await req.json();
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
