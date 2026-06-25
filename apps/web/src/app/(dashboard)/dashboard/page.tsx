@@ -87,7 +87,7 @@ export default async function DashboardPage() {
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">✅ Completado</p>
         <div className="space-y-2 mb-6">
           {[
-            "Wizard de configuración con IA",
+            "Wizard de configuración con IA (Groq / Gemini / Claude)",
             "Gestión completa de tickets (dos formularios: usuario y TI)",
             "12 estados de ticket con flujo de trabajo",
             "SLA automático por prioridad (colores en lista)",
@@ -99,6 +99,16 @@ export default async function DashboardPage() {
             "Firma de email por agente",
             "Filtros avanzados en lista de tickets",
             "Deploy automático en Railway",
+            "Recepción de tickets por email (IMAP entrante)",
+            "Vista Kanban de tickets",
+            "Reportes y métricas (tiempo de resolución, SLA, por agente)",
+            "Respuestas predefinidas con variables dinámicas ({nombre}, {numero}, {agente}...)",
+            "Inventario de activos — agente automático (.bat + tarea programada cada 3 días)",
+            "Detección de monitores y mouse en inventario de activos",
+            "Scanner de red con detección de dispositivos y cámaras IP",
+            "Módulo DVR/CCTV completo (búsqueda de grabaciones Dahua RPC2)",
+            "Recuperación de contraseña por email (enlace de un solo uso)",
+            "Seguridad: rate limiting por IP + secrets en variables de entorno",
           ].map((item) => (
             <div key={item} className="flex items-center gap-3 text-sm">
               <span className="text-green-500 flex-shrink-0">✓</span>
@@ -125,11 +135,7 @@ export default async function DashboardPage() {
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">⏳ Pendiente</p>
         <div className="space-y-2">
           {[
-            "Recepción de tickets por email (IMAP entrante)",
-            "Vista Kanban de tickets",
-            "Reportes y métricas (tiempo de resolución, SLA, por agente)",
-            "Inventario de activos (CRUD completo)",
-            "Respuestas predefinidas con variables dinámicas",
+            "Inventario de activos — CRUD manual (agregar/editar activos sin agente)",
             "WhatsApp (Baileys — canal gratuito)",
             "Portal de autoservicio para usuarios finales",
             "Base de conocimiento / FAQ desde soluciones",
