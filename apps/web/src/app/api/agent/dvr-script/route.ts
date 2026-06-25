@@ -3,14 +3,16 @@ import { auth } from "@/auth";
 import { prisma } from "@helpdesk-os/db";
 import crypto from "crypto";
 
-const _secret = process.env.DVR_ENCRYPTION_KEY ?? process.env.AUTH_SECRET;
-if (!_secret) throw new Error("DVR_ENCRYPTION_KEY o AUTH_SECRET debe estar configurado");
-const ENC_KEY = _secret.slice(0, 32);
+function getEncKey(): string {
+  const s = process.env.DVR_ENCRYPTION_KEY ?? process.env.AUTH_SECRET;
+  if (!s) throw new Error("DVR_ENCRYPTION_KEY o AUTH_SECRET debe estar configurado");
+  return s.slice(0, 32);
+}
 function decrypt(text: string): string {
   const [ivHex, encHex] = text.split(":");
   const iv  = Buffer.from(ivHex, "hex");
   const enc = Buffer.from(encHex, "hex");
-  const d   = crypto.createDecipheriv("aes-256-cbc", Buffer.from(ENC_KEY), iv);
+  const d   = crypto.createDecipheriv("aes-256-cbc", Buffer.from(getEncKey()), iv);
   return Buffer.concat([d.update(enc), d.final()]).toString("utf8");
 }
 
@@ -29,7 +31,8 @@ export async function GET(req: NextRequest) {
   if (!job) return NextResponse.json({ error: "Job no encontrado" }, { status: 404 });
 
   const dvr = await prisma.dvr.findFirst({ where: { id: job.dvrId, tenantId } });
-  const dvrLocalIp = dvr?.localIp ?? dvr?.ip ?? null;
+  if (!dvr) return NextResponse.json({ error: "DVR no encontrado" }, { status: 404 });
+  const dvrLocalIp = dvr.localIp ?? dvr.ip ?? null;
   if (!dvrLocalIp) return NextResponse.json({ error: "DVR sin IP local" }, { status: 400 });
 
   let username = "admin";

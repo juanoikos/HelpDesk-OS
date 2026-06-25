@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@helpdesk-os/db";
 import crypto from "crypto";
 
-const _secret = process.env.DVR_ENCRYPTION_KEY ?? process.env.AUTH_SECRET;
-if (!_secret) throw new Error("DVR_ENCRYPTION_KEY o AUTH_SECRET debe estar configurado");
-const ENC_KEY = _secret.slice(0, 32);
+function getEncKey(): string {
+  const s = process.env.DVR_ENCRYPTION_KEY ?? process.env.AUTH_SECRET;
+  if (!s) throw new Error("DVR_ENCRYPTION_KEY o AUTH_SECRET debe estar configurado");
+  return s.slice(0, 32);
+}
 function decrypt(text: string): string {
   const [ivHex, encHex] = text.split(":");
   const iv  = Buffer.from(ivHex, "hex");
   const enc = Buffer.from(encHex, "hex");
-  const d   = crypto.createDecipheriv("aes-256-cbc", Buffer.from(ENC_KEY), iv);
+  const d   = crypto.createDecipheriv("aes-256-cbc", Buffer.from(getEncKey()), iv);
   return Buffer.concat([d.update(enc), d.final()]).toString("utf8");
 }
 

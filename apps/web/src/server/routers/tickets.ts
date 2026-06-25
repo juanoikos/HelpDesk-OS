@@ -123,7 +123,7 @@ export const ticketsRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const tenantId = ctx.session.user.tenantId;
-      const userId   = ctx.session.user.id;
+      const userId   = ctx.session.user.id!;
 
       // Número secuencial por empresa
       const last = await prisma.ticket.findFirst({
@@ -180,7 +180,8 @@ export const ticketsRouter = router({
       });
 
       // Notificación fire-and-forget (no bloquea la respuesta)
-      notifyTicketCreated(ticket).catch(console.error);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      notifyTicketCreated(ticket as any).catch(console.error);
 
       return ticket;
     }),

@@ -429,8 +429,8 @@ function HardwareDetail({ asset, onClose }: { asset: ReturnType<typeof useAssetD
                   <div key={i} className="bg-slate-800 rounded-lg px-4 py-3">
                     <p className="text-slate-200 text-sm">{String(m.name || m.manufacturer || "Monitor desconocido")}</p>
                     <div className="flex gap-4 mt-1 flex-wrap">
-                      {m.manufacturer && <span className="text-slate-500 text-xs">Marca: <span className="text-slate-300">{String(m.manufacturer)}</span></span>}
-                      {m.serial && <span className="text-slate-500 text-xs">Serial: <span className="text-slate-300 font-mono">{String(m.serial)}</span></span>}
+                      {m.manufacturer ? <span className="text-slate-500 text-xs">Marca: <span className="text-slate-300">{String(m.manufacturer)}</span></span> : null}
+                      {m.serial ? <span className="text-slate-500 text-xs">Serial: <span className="text-slate-300 font-mono">{String(m.serial)}</span></span> : null}
                     </div>
                   </div>
                 ))}
@@ -446,7 +446,7 @@ function HardwareDetail({ asset, onClose }: { asset: ReturnType<typeof useAssetD
                 {hw.mice.map((m: Record<string, unknown>, i: number) => (
                   <div key={i} className="bg-slate-800 rounded-lg px-4 py-3 flex justify-between items-center">
                     <span className="text-slate-200 text-sm">{String(m.name ?? "Mouse desconocido")}</span>
-                    {m.manufacturer && <span className="text-slate-500 text-xs">{String(m.manufacturer)}</span>}
+                    {m.manufacturer ? <span className="text-slate-500 text-xs">{String(m.manufacturer)}</span> : null}
                   </div>
                 ))}
               </div>
