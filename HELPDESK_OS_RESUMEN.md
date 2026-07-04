@@ -1,5 +1,5 @@
 # HelpDesk OS — Resumen Completo del Proyecto
-> Actualizado: 2026-06-05
+> Actualizado: 2026-06-25
 
 ---
 
@@ -86,7 +86,8 @@ ANTHROPIC_API_KEY     → (privado)
 
 ### 🖥️ Inventario de Activos
 - Agente PS1 descargable como `.bat` autónomo (base64+certutil, sin política de ejecución)
-- Recopila: OS, CPU, RAM+seriales, discos+seriales, placa madre, BIOS, GPU, red, USB
+- Recopila: OS, CPU, RAM+seriales, discos+seriales, placa madre, BIOS, GPU, red, USB, **monitores y mouse** (nuevo — 2026-06-11)
+- **Autoinstalación** (nuevo — 2026-06-11): el agente se descarga a sí mismo del servidor y se registra como tarea programada de Windows cada 3 días. Fuerza TLS 1.2 para compatibilidad con Windows antiguos.
 - Campos manuales: Número de activo, Sede/Tienda
 - Exportar Excel (.xlsx) con filtros
 - **Cruce con Red**: si el hostname coincide con un dispositivo del scan, muestra CPU/RAM/usuario
@@ -111,7 +112,19 @@ Ver sección completa más abajo.
 ### 📧 Email
 - **Saliente (Resend):** ticket creado, estado cambiado, nueva respuesta, actividad agente, solicitud aprobación cierre, invitación usuario
 - **Entrante (IMAP):** polling cada 2 min, crea tickets desde emails, replies `[#NNN]` van al ticket existente, deduplicación por Message-ID
+- **Recuperación de contraseña** (nuevo — 2026-06-11): `/forgot-password` → email con enlace → `/reset-password/[token]` (token expira en 1h, un solo uso)
 - ⚠️ FROM usa `onboarding@resend.dev` — pendiente verificar dominio `dyccomputersas.com`
+
+### 🤖 Wizard de configuración con IA (actualizado — 2026-06-11)
+- **Groq (Llama 3)** como proveedor primario gratuito, auto-selección de Gemini sobre Claude cuando está disponible, modelo Gemini en `1.5-flash` (mejor límite gratuito)
+- Mensajes de error amigables en vez de JSON crudo
+- Roadmap del dashboard oculto para tenants no-developer
+
+### 🔒 Seguridad (nuevo — 2026-06-25)
+- Rate limiting por IP: register (5/15min), forgot-password (3/1h), reset-password (5/15min) — `apps/web/src/lib/rate-limit.ts`
+- Eliminado fallback hardcodeado de la clave de cifrado DVR (ahora requiere env var)
+- SQL injection revisado: seguro por Prisma ORM
+- Todos los errores de compilación TypeScript resueltos
 
 ### ⚙️ Configuración (7 pestañas)
 | Pestaña | Contenido |
@@ -286,7 +299,7 @@ helpdesk-os/
 
 ---
 
-## Pendientes
+## Pendientes (actualizado 2026-06-25)
 
 ### 🔴 Alta Prioridad
 1. **Dominio Resend** — verificar `dyccomputersas.com` en Resend + DNS → emails a Camilo
@@ -295,9 +308,9 @@ helpdesk-os/
    - Descargar de: dahuasecurity.com/support → General SDK → Windows → C#
 
 ### 🟠 Media Prioridad
-3. **Agente PS1 DVR local** — probar con DVR 192.168.1.15 (Camilo, puerto 80, RPC2)
-4. **Firma de email** — implementada, sin probar
-5. **Respuestas rápidas con variables** — implementadas, sin probar en producción
+3. **Inventario de activos — CRUD manual** — agregar/editar activos sin necesidad del agente
+4. **Agente PS1 DVR local** — probar con DVR 192.168.1.15 (Camilo, puerto 80, RPC2)
+5. **Ping desde Monitor de Red** — botón ping por IP en /network
 6. **PWA (app móvil)** — instalable Android/iOS
 
 ### 🟡 Baja Prioridad
@@ -305,14 +318,12 @@ helpdesk-os/
 8. Base de conocimiento
 9. WhatsApp Baileys (canal gratuito QR)
 10. Reportes avanzados (exportar PDF)
-11. Inventario activos CRUD (UI manual)
 
 ---
 
 ## Bugs Conocidos
-- `email.ts`: errores TS no críticos (FROM function type) — pre-existentes
-- `tickets.ts`: `createdById` puede ser undefined — TS warning pre-existente
-- Scanner de red: probar `.bat` actualizado con Camilo en su red
+- Ninguno de TypeScript pendiente (todos resueltos el 2026-06-25)
+- Scanner de red: probar `.bat` actualizado (v2.0 multi-subred) con Camilo en su red
 
 ---
 
