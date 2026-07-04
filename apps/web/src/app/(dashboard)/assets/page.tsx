@@ -23,15 +23,25 @@ function formatDate(d: Date | string | null): string {
 }
 
 const TYPE_LABEL: Record<string, string> = {
-  LAPTOP:  "💻 Laptop",
-  DESKTOP: "🖥️ Desktop",
-  MONITOR: "🖵 Monitor",
-  PHONE:   "📱 Teléfono",
-  PRINTER: "🖨️ Impresora",
-  SERVER:  "🗄️ Servidor",
-  NETWORK: "🌐 Red",
-  OTHER:   "📦 Otro",
+  LAPTOP:          "💻 Laptop",
+  DESKTOP:         "🖥️ Desktop",
+  MONITOR:         "🖵 Monitor",
+  PHONE:           "📱 Teléfono",
+  PRINTER:         "🖨️ Impresora",
+  SERVER:          "🗄️ Servidor",
+  NETWORK:         "🌐 Red",
+  NVR:             "📹 NVR",
+  SWITCH:          "🔀 Switch",
+  ACCESS_POINT:    "📡 Access Point",
+  FIREWALL:        "🧱 Firewall",
+  VIDEOCONFERENCE: "🎥 Videoconferencia",
+  OTHER:           "📦 Otro",
 };
+
+type AssetTypeValue =
+  | "LAPTOP" | "DESKTOP" | "MONITOR" | "PHONE" | "PRINTER" | "SERVER" | "NETWORK"
+  | "NVR" | "SWITCH" | "ACCESS_POINT" | "FIREWALL" | "VIDEOCONFERENCE" | "OTHER";
+type AssetStatusValue = "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "RETIRED";
 
 const STATUS_CONFIG: Record<string, { label: string; badge: string }> = {
   ACTIVE:      { label: "Activo",      badge: "bg-green-900 text-green-300" },
@@ -45,11 +55,11 @@ const STATUS_CONFIG: Record<string, { label: string; badge: string }> = {
 function CreateAssetModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [form, setForm] = useState({
     name:         "",
-    type:         "DESKTOP" as "LAPTOP" | "DESKTOP" | "MONITOR" | "PHONE" | "PRINTER" | "SERVER" | "NETWORK" | "OTHER",
+    type:         "DESKTOP" as AssetTypeValue,
     serialNumber: "",
     brand:        "",
     model:        "",
-    status:       "ACTIVE" as "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "RETIRED",
+    status:       "ACTIVE" as AssetStatusValue,
   });
   const [error, setError] = useState("");
 
@@ -172,17 +182,23 @@ function CreateAssetModal({ onClose, onCreated }: { onClose: () => void; onCreat
 
 // ─── Hardware Detail Panel ────────────────────────────────────────────────────
 
-function HardwareDetail({ asset, onClose }: { asset: ReturnType<typeof useAssetDetail>["data"]; onClose: () => void }) {
+function HardwareDetail({ asset, isAdmin, onClose }: { asset: ReturnType<typeof useAssetDetail>["data"]; isAdmin: boolean; onClose: () => void }) {
   if (!asset) return null;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const hw = asset.hardwareData as Record<string, any> | null;
   const utils = trpc.useUtils();
-  const [assetNumber, setAssetNumber] = useState(asset.assetNumber ?? "");
-  const [location,    setLocation]    = useState(asset.location ?? "");
-  const [saving,      setSaving]      = useState(false);
-  const [saved,       setSaved]       = useState(false);
-  const [confirming,  setConfirming]  = useState(false);
+  const [name,         setName]         = useState(asset.name ?? "");
+  const [type,         setType]         = useState(asset.type as AssetTypeValue);
+  const [brand,        setBrand]        = useState(asset.brand ?? "");
+  const [model,        setModel]        = useState(asset.model ?? "");
+  const [serialNumber, setSerialNumber] = useState(asset.serialNumber ?? "");
+  const [status,       setStatus]       = useState(asset.status as AssetStatusValue);
+  const [assetNumber,  setAssetNumber]  = useState(asset.assetNumber ?? "");
+  const [location,     setLocation]     = useState(asset.location ?? "");
+  const [saving,       setSaving]       = useState(false);
+  const [saved,        setSaved]        = useState(false);
+  const [confirming,   setConfirming]   = useState(false);
 
   const deleteMut = trpc.assets.delete.useMutation({
     onSuccess: () => {
@@ -191,10 +207,23 @@ function HardwareDetail({ asset, onClose }: { asset: ReturnType<typeof useAssetD
     },
   });
 
+  const retireMut = trpc.assets.update.useMutation({
+    onSuccess: () => {
+      utils.assets.list.invalidate();
+      utils.assets.getById.invalidate({ id: asset.id });
+    },
+  });
+
   useEffect(() => {
+    setName(asset.name ?? "");
+    setType(asset.type as AssetTypeValue);
+    setBrand(asset.brand ?? "");
+    setModel(asset.model ?? "");
+    setSerialNumber(asset.serialNumber ?? "");
+    setStatus(asset.status as AssetStatusValue);
     setAssetNumber(asset.assetNumber ?? "");
     setLocation(asset.location ?? "");
-  }, [asset.id, asset.assetNumber, asset.location]);
+  }, [asset.id, asset.name, asset.type, asset.brand, asset.model, asset.serialNumber, asset.status, asset.assetNumber, asset.location]);
 
   const updateMut = trpc.assets.update.useMutation({
     onSuccess: () => {
@@ -209,7 +238,26 @@ function HardwareDetail({ asset, onClose }: { asset: ReturnType<typeof useAssetD
   const handleSave = () => {
     setSaving(true);
     setSaved(false);
-    updateMut.mutate({ id: asset.id, assetNumber: assetNumber || null, location: location || null });
+    updateMut.mutate({
+      id: asset.id,
+      name,
+      type,
+      brand:        brand || null,
+      model:        model || null,
+      serialNumber: serialNumber || null,
+      status,
+      assetNumber:  assetNumber || null,
+      location:     location || null,
+    });
+  };
+
+  const handleToggleRetired = () => {
+    const goingToRetire = asset.status !== "RETIRED";
+    const msg = goingToRetire
+      ? "¿Dar de baja este activo? Se marcará como Retirado, sin borrar su historial."
+      : "¿Reactivar este activo?";
+    if (!confirm(msg)) return;
+    retireMut.mutate({ id: asset.id, status: goingToRetire ? "RETIRED" : "ACTIVE" });
   };
 
   return (
@@ -225,17 +273,25 @@ function HardwareDetail({ asset, onClose }: { asset: ReturnType<typeof useAssetD
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {!confirming ? (
+            <button
+              onClick={handleToggleRetired}
+              disabled={retireMut.isPending}
+              className={`text-xs transition-colors disabled:opacity-50 ${asset.status === "RETIRED" ? "text-slate-500 hover:text-green-400" : "text-slate-500 hover:text-amber-400"}`}
+              title={asset.status === "RETIRED" ? "Reactivar activo" : "Dar de baja (soft-delete, no borra el historial)"}
+            >
+              {retireMut.isPending ? "…" : asset.status === "RETIRED" ? "↺ Reactivar" : "🔻 Dar de baja"}
+            </button>
+            {isAdmin && (!confirming ? (
               <button
                 onClick={() => setConfirming(true)}
                 className="text-slate-600 hover:text-red-400 transition-colors text-xs"
-                title="Eliminar activo"
+                title="Eliminar definitivamente (borrado físico)"
               >
-                🗑 Eliminar
+                🗑 Eliminar definitivamente
               </button>
             ) : (
               <div className="flex items-center gap-2">
-                <span className="text-red-400 text-xs">¿Eliminar este activo?</span>
+                <span className="text-red-400 text-xs">¿Eliminar definitivamente? No se puede deshacer.</span>
                 <button
                   onClick={() => deleteMut.mutate({ id: asset.id })}
                   disabled={deleteMut.isPending}
@@ -250,16 +306,80 @@ function HardwareDetail({ asset, onClose }: { asset: ReturnType<typeof useAssetD
                   Cancelar
                 </button>
               </div>
-            )}
+            ))}
             <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors text-xl leading-none">✕</button>
           </div>
         </div>
 
         <div className="p-6 space-y-6">
 
-          {/* Campos editables: número de activo y sede */}
+          {/* Campos editables del activo */}
           <section className="bg-slate-800 rounded-xl p-4 space-y-3">
             <h3 className="text-slate-300 text-sm font-semibold">Gestión del activo</h3>
+            <div>
+              <label className="text-slate-500 text-xs block mb-1">Nombre</label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="PC-RECEPCION-01"
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-slate-500 text-xs block mb-1">Tipo</label>
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value as AssetTypeValue)}
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {Object.entries(TYPE_LABEL).map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-slate-500 text-xs block mb-1">Estado</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as AssetStatusValue)}
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {Object.entries(STATUS_CONFIG).map(([v, c]) => (
+                    <option key={v} value={v}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-slate-500 text-xs block mb-1">Marca</label>
+                <input
+                  value={brand}
+                  onChange={(e) => setBrand(e.target.value)}
+                  placeholder="Dell, HP, Lenovo…"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-slate-500 text-xs block mb-1">Modelo</label>
+                <input
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder="OptiPlex 7010"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-slate-500 text-xs block mb-1">Número de serie</label>
+              <input
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+                placeholder="SN-XXXXXXXX"
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-slate-500 text-xs block mb-1">Número de activo</label>
@@ -553,6 +673,8 @@ export default function AssetsPage() {
   const utils        = trpc.useUtils();
   const assetsQuery  = trpc.assets.list.useQuery();
   const assets       = assetsQuery.data ?? [];
+  const { data: profile } = trpc.settings.getProfile.useQuery();
+  const isAdmin       = profile?.role === "ADMIN";
 
   const [showCreate,      setShowCreate]    = useState(false);
   const [selectedId,      setSelectedId]    = useState<string | null>(null);
@@ -803,6 +925,7 @@ export default function AssetsPage() {
       {selectedId && (
         <HardwareDetail
           asset={detailQuery.data ?? undefined}
+          isAdmin={isAdmin}
           onClose={() => setSelectedId(null)}
         />
       )}

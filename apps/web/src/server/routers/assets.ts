@@ -69,7 +69,7 @@ export const assetsRouter = router({
   create: protectedProcedure
     .input(z.object({
       name:         z.string().min(1, "El nombre es requerido").max(100),
-      type:         z.enum(["LAPTOP", "DESKTOP", "MONITOR", "PHONE", "PRINTER", "SERVER", "NETWORK", "OTHER"]),
+      type:         z.enum(["LAPTOP", "DESKTOP", "MONITOR", "PHONE", "PRINTER", "SERVER", "NETWORK", "NVR", "SWITCH", "ACCESS_POINT", "FIREWALL", "VIDEOCONFERENCE", "OTHER"]),
       serialNumber: z.string().max(100).optional(),
       brand:        z.string().max(80).optional(),
       model:        z.string().max(80).optional(),
@@ -89,7 +89,7 @@ export const assetsRouter = router({
     .input(z.object({
       id:           z.string(),
       name:         z.string().min(1).max(100).optional(),
-      type:         z.enum(["LAPTOP", "DESKTOP", "MONITOR", "PHONE", "PRINTER", "SERVER", "NETWORK", "OTHER"]).optional(),
+      type:         z.enum(["LAPTOP", "DESKTOP", "MONITOR", "PHONE", "PRINTER", "SERVER", "NETWORK", "NVR", "SWITCH", "ACCESS_POINT", "FIREWALL", "VIDEOCONFERENCE", "OTHER"]).optional(),
       serialNumber: z.string().max(100).optional().nullable(),
       brand:        z.string().max(80).optional().nullable(),
       model:        z.string().max(80).optional().nullable(),
