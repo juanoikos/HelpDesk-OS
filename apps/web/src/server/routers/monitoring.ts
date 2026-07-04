@@ -23,6 +23,43 @@ const targetInput = z.object({
   agentHost:   z.string().optional(),
 });
 
+// ── Heurística compartida: elegir checkType/puerto según los puertos detectados
+//    por el scanner de red para un NetworkDevice. Usada por importFromNetwork
+//    (import masivo) y pingNetworkDevice (import puntual desde el botón de ping). ──
+function buildTargetDataForDevice(d: { ip: string; hostname: string | null; vendor: string | null; openPorts: unknown }) {
+  const ports = (d.openPorts as number[] | null) ?? [];
+
+  let checkType: "http" | "https" | "tcp" | "ping" = "ping";
+  let port: number | undefined;
+
+  if (ports.includes(443) || ports.includes(8443)) {
+    checkType = "https";
+    port = ports.includes(443) ? 443 : 8443;
+  } else if (ports.includes(80) || ports.includes(8080) || ports.includes(8000)) {
+    checkType = "http";
+    port = ports.includes(80) ? undefined : ports.includes(8080) ? 8080 : 8000;
+  } else if (ports.length > 0) {
+    checkType = "tcp";
+    const priority = [22, 554, 37777, 34567, 23];
+    const preferred = priority.find((p) => ports.includes(p));
+    port = preferred ?? ports[0];
+  }
+
+  const name = d.hostname ?? d.vendor ?? `Dispositivo ${d.ip}`;
+
+  return {
+    name:     name.slice(0, 100),
+    host:     d.ip,
+    checkType,
+    port:     port ?? null,
+    httpPath: "/",
+    interval: 60,
+    timeout:  5000,
+    retries:  2,
+    enabled:  true,
+  };
+}
+
 export const monitoringRouter = router({
 
   // ── Listar targets con últimos 40 checks (para timeline) ───────────────────
@@ -198,41 +235,10 @@ export const monitoringRouter = router({
     for (const d of devices) {
       if (existingHosts.has(d.ip)) { skipped++; continue; }
 
-      const ports = (d.openPorts as number[] | null) ?? [];
-
-      // Seleccionar el mejor método de check según puertos detectados
-      let checkType: "http" | "https" | "tcp" | "ping" = "ping";
-      let port: number | undefined;
-
-      if (ports.includes(443) || ports.includes(8443)) {
-        checkType = "https";
-        port = ports.includes(443) ? 443 : 8443;
-      } else if (ports.includes(80) || ports.includes(8080) || ports.includes(8000)) {
-        checkType = "http";
-        port = ports.includes(80) ? undefined : ports.includes(8080) ? 8080 : 8000;
-      } else if (ports.length > 0) {
-        checkType = "tcp";
-        // Prioridad: 22 SSH, 554 RTSP, 37777 Dahua, 34567 DVR, primer puerto disponible
-        const priority = [22, 554, 37777, 34567, 23];
-        const preferred = priority.find((p) => ports.includes(p));
-        port = preferred ?? ports[0];
-      }
-
-      // Nombre descriptivo
-      const name = d.hostname ?? d.vendor ?? `Dispositivo ${d.ip}`;
-
       await prisma.monitorTarget.create({
         data: {
           tenantId,
-          name:        name.slice(0, 100),
-          host:        d.ip,
-          checkType,
-          port:        port ?? null,
-          httpPath:    "/",
-          interval:    60,
-          timeout:     5000,
-          retries:     2,
-          enabled:     true,
+          ...buildTargetDataForDevice(d),
           networkType: "lan",
           agentHost:   d.scannedFrom, // el agente que escaneó esa red lo monitoreará
         },
@@ -264,5 +270,62 @@ export const monitoringRouter = router({
 
       const updated = await prisma.monitorTarget.findUnique({ where: { id: input.targetId } });
       return updated;
+    }),
+
+  // ── Ping en vivo desde el Scanner de Red ────────────────────────────────────
+  // Asegura un MonitorTarget "lan" para el dispositivo y avisa si el agente LAN
+  // de esa red ha reportado recientemente (si no, el ping nunca va a resolver).
+  pingNetworkDevice: protectedProcedure
+    .input(z.object({ deviceId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const tenantId = ctx.session.user.tenantId;
+
+      const device = await prisma.networkDevice.findFirst({
+        where: { id: input.deviceId, tenantId },
+      });
+      if (!device) throw new TRPCError({ code: "NOT_FOUND", message: "Dispositivo no encontrado" });
+
+      let target = await prisma.monitorTarget.findFirst({
+        where: { tenantId, host: device.ip },
+      });
+
+      if (!target) {
+        target = await prisma.monitorTarget.create({
+          data: {
+            tenantId,
+            ...buildTargetDataForDevice(device),
+            networkType: "lan",
+            agentHost:   device.scannedFrom,
+          },
+        });
+      }
+
+      const recentCheck = await prisma.monitorCheck.findFirst({
+        where: {
+          tenantId,
+          checkedBy: device.scannedFrom,
+          checkedAt: { gte: new Date(Date.now() - 3 * 60_000) },
+        },
+      });
+
+      return {
+        targetId:         target.id,
+        requestedAt:      new Date().toISOString(),
+        agentSeenRecently: !!recentCheck,
+        agentHost:         device.scannedFrom,
+      };
+    }),
+
+  // ── Estado actual de un target (para polling desde el botón de ping) ───────
+  getTargetStatus: protectedProcedure
+    .input(z.object({ targetId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const tenantId = ctx.session.user.tenantId;
+      const target = await prisma.monitorTarget.findFirst({
+        where:  { id: input.targetId, tenantId },
+        select: { status: true, lastChecked: true, lastLatency: true, lastError: true },
+      });
+      if (!target) throw new TRPCError({ code: "NOT_FOUND" });
+      return target;
     }),
 });

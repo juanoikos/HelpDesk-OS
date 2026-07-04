@@ -1,7 +1,7 @@
 "use client";
 
 import { trpc } from "@/trpc/react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 
 // ── Ping desde browser (no-cors: si responde → online) ────────────────────────
 type PingState = "idle" | "pinging" | "online" | "offline";
@@ -34,6 +34,78 @@ function usePing() {
   }, []);
 
   return { states, latencies, ping };
+}
+
+// ── Ping en vivo vía agente LAN de Monitoreo (real, funciona aunque el soporte
+//    esté remoto — pero depende de que ese agente esté instalado y corriendo) ──
+type LiveState = "idle" | "requesting" | "waiting" | "up" | "down" | "timeout" | "agent_missing" | "error";
+
+function usePingLive() {
+  const [states, setStates] = useState<Record<string, LiveState>>({});
+  const [latencies, setLatencies] = useState<Record<string, number>>({});
+  const utils = trpc.useUtils();
+  const pingMut = trpc.monitoring.pingNetworkDevice.useMutation();
+  const timersRef = useRef<Record<string, { interval: ReturnType<typeof setInterval>; timeout: ReturnType<typeof setTimeout> }>>({});
+
+  const clearTimers = useCallback((ip: string) => {
+    const t = timersRef.current[ip];
+    if (t) {
+      clearInterval(t.interval);
+      clearTimeout(t.timeout);
+      delete timersRef.current[ip];
+    }
+  }, []);
+
+  useEffect(() => () => {
+    Object.values(timersRef.current).forEach(({ interval, timeout }) => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    });
+  }, []);
+
+  const pingLive = useCallback(async (deviceId: string, ip: string) => {
+    clearTimers(ip);
+    setStates(prev => ({ ...prev, [ip]: "requesting" }));
+
+    try {
+      const res = await pingMut.mutateAsync({ deviceId });
+
+      if (!res.agentSeenRecently) {
+        setStates(prev => ({ ...prev, [ip]: "agent_missing" }));
+        return;
+      }
+
+      setStates(prev => ({ ...prev, [ip]: "waiting" }));
+      const requestedAt = new Date(res.requestedAt).getTime();
+
+      const interval = setInterval(async () => {
+        const status = await utils.monitoring.getTargetStatus.fetch({ targetId: res.targetId });
+        const lastChecked = status.lastChecked ? new Date(status.lastChecked).getTime() : 0;
+        if (lastChecked < requestedAt) return; // el agente todavía no reportó un check nuevo
+
+        clearTimers(ip);
+        if (status.status === "up") {
+          setStates(prev => ({ ...prev, [ip]: "up" }));
+          if (status.lastLatency != null) setLatencies(prev => ({ ...prev, [ip]: status.lastLatency! }));
+        } else if (status.status === "timeout") {
+          setStates(prev => ({ ...prev, [ip]: "timeout" }));
+        } else {
+          setStates(prev => ({ ...prev, [ip]: "down" }));
+        }
+      }, 3000);
+
+      const timeout = setTimeout(() => {
+        clearTimers(ip);
+        setStates(prev => ({ ...prev, [ip]: "timeout" }));
+      }, 90_000);
+
+      timersRef.current[ip] = { interval, timeout };
+    } catch {
+      setStates(prev => ({ ...prev, [ip]: "error" }));
+    }
+  }, [pingMut, utils, clearTimers]);
+
+  return { states, latencies, pingLive };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -362,6 +434,7 @@ export default function NetworkPage() {
   );
 
   const { states: pingStates, latencies: pingLatencies, ping } = usePing();
+  const { states: liveStates, latencies: liveLatencies, pingLive } = usePingLive();
 
   const deleteMut = trpc.networkDevices.delete.useMutation({
     onSuccess: () => {
@@ -690,27 +763,65 @@ export default function NetworkPage() {
 
                       {/* Ping */}
                       <td className="px-4 py-3">
-                        {(() => {
-                          const state   = pingStates[device.ip];
-                          const latency = pingLatencies[device.ip];
-                          return (
-                            <button
-                              onClick={() => ping(device.ip, device.openPorts as number[] ?? [])}
-                              disabled={state === "pinging"}
-                              title="Ping desde tu navegador (requiere estar en la misma red)"
-                              className={`text-xs px-2.5 py-1 rounded-lg border font-mono transition-colors whitespace-nowrap
-                                ${state === "online"  ? "border-green-700 text-green-400 bg-green-900/20" :
-                                  state === "offline" ? "border-red-800 text-red-400 bg-red-900/20" :
-                                  state === "pinging" ? "border-slate-700 text-slate-500 animate-pulse" :
-                                  "border-slate-700 text-slate-500 hover:text-yellow-400 hover:border-yellow-800"}`}
-                            >
-                              {state === "pinging" ? "…" :
-                               state === "online"  ? `✓ ${latency}ms` :
-                               state === "offline" ? "✗ offline" :
-                               "⚡ ping"}
-                            </button>
-                          );
-                        })()}
+                        <div className="flex items-center gap-1.5">
+                          {(() => {
+                            const state   = pingStates[device.ip];
+                            const latency = pingLatencies[device.ip];
+                            return (
+                              <button
+                                onClick={() => ping(device.ip, device.openPorts as number[] ?? [])}
+                                disabled={state === "pinging"}
+                                title="Ping desde tu navegador (requiere estar en la misma red)"
+                                className={`text-xs px-2.5 py-1 rounded-lg border font-mono transition-colors whitespace-nowrap
+                                  ${state === "online"  ? "border-green-700 text-green-400 bg-green-900/20" :
+                                    state === "offline" ? "border-red-800 text-red-400 bg-red-900/20" :
+                                    state === "pinging" ? "border-slate-700 text-slate-500 animate-pulse" :
+                                    "border-slate-700 text-slate-500 hover:text-yellow-400 hover:border-yellow-800"}`}
+                              >
+                                {state === "pinging" ? "…" :
+                                 state === "online"  ? `✓ ${latency}ms` :
+                                 state === "offline" ? "✗ offline" :
+                                 "⚡ ping"}
+                              </button>
+                            );
+                          })()}
+                          {(() => {
+                            const state   = liveStates[device.ip];
+                            const latency = liveLatencies[device.ip];
+                            const busy    = state === "requesting" || state === "waiting";
+                            const label =
+                              state === "requesting" ? "…" :
+                              state === "waiting"     ? "esperando…" :
+                              state === "up"          ? `✓ ${latency}ms` :
+                              state === "down"        ? "✗ down" :
+                              state === "timeout"     ? "⏱ timeout" :
+                              state === "agent_missing" ? "sin agente" :
+                              state === "error"       ? "✗ error" :
+                              "📡 en vivo";
+                            return (
+                              <button
+                                onClick={() => pingLive(device.id, device.ip)}
+                                disabled={busy}
+                                title="Ping en vivo vía agente de Monitoreo LAN (funciona aunque no estés en esa red, requiere el agente instalado)"
+                                className={`text-xs px-2.5 py-1 rounded-lg border font-mono transition-colors whitespace-nowrap
+                                  ${state === "up"            ? "border-green-700 text-green-400 bg-green-900/20" :
+                                    state === "down"          ? "border-red-800 text-red-400 bg-red-900/20" :
+                                    state === "timeout"       ? "border-amber-700 text-amber-400 bg-amber-900/20" :
+                                    state === "agent_missing" ? "border-amber-800 text-amber-500 bg-amber-900/10" :
+                                    state === "error"         ? "border-red-800 text-red-400 bg-red-900/20" :
+                                    busy                      ? "border-slate-700 text-slate-500 animate-pulse" :
+                                    "border-slate-700 text-slate-500 hover:text-blue-400 hover:border-blue-800"}`}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })()}
+                          {liveStates[device.ip] === "agent_missing" && (
+                            <a href="/monitoring" className="text-xs text-blue-400 hover:text-blue-300 underline whitespace-nowrap">
+                              instalar agente
+                            </a>
+                          )}
+                        </div>
                       </td>
 
                       {/* Última vez */}
