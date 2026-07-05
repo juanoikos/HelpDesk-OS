@@ -94,21 +94,41 @@ del "%TMPPS1%" 2>nul
 
 const PS1_TEMPLATE = `
 # ================================================================
-#  HelpDesk OS - Agente de inventario de hardware v1.1
+#  HelpDesk OS - Agente de inventario de hardware v1.3
 #  Ejecuta como Administrador para mejores resultados
 # ================================================================
+param([switch]$Scheduled)
 
 $API_URL   = "APP_URL_PLACEHOLDER"
 $API_TOKEN = "TOKEN_PLACEHOLDER"
-$AGENT_VER = "1.2.0"
+$AGENT_VER = "1.3.0"
 
 # Forzar TLS 1.2 (requerido en Windows 7/8/Server 2012 y algunos Win10 viejos)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+# ---- Si corre desde la tarea programada, primero preguntar si hace falta ----
+# (revision liviana cada ~15 min; solo hace el escaneo completo si el servidor
+#  dice que toca por el ciclo automatico de 3 dias o por un pedido manual desde la web)
+if ($Scheduled) {
+    try {
+        $checkHeaders = @{ "Authorization" = "Bearer $API_TOKEN" }
+        $checkUrl     = "$API_URL/api/agent/inventory-check?hostname=$([uri]::EscapeDataString($env:COMPUTERNAME))"
+        $check        = Invoke-RestMethod -Uri $checkUrl -Headers $checkHeaders -Method GET -TimeoutSec 15
+        if (-not $check.shouldRun) {
+            Write-Host "  HelpDesk OS - Sin cambios pendientes, saliendo." -ForegroundColor DarkGray
+            exit 0
+        }
+    } catch {
+        # Si el chequeo falla (sin internet, servidor caido) no forzamos el escaneo completo
+        Write-Host "  HelpDesk OS - No se pudo verificar, saliendo." -ForegroundColor DarkGray
+        exit 0
+    }
+}
+
 Write-Host ""
 Write-Host "  HelpDesk OS - Agente de inventario" -ForegroundColor Cyan
 Write-Host "  ===================================" -ForegroundColor DarkGray
-Write-Host "  Version 1.2 - Monitores, mouse y tarea automatica" -ForegroundColor DarkGray
+Write-Host "  Version 1.3 - Actualizar ahora desde la web" -ForegroundColor DarkGray
 Write-Host ""
 
 # ---- [1/10] Sistema operativo ----
@@ -269,10 +289,14 @@ try {
     $agentScript = Invoke-RestMethod -Uri "$API_URL/api/agent/script" -Headers $dlHeaders -Method GET
     Set-Content -Path $agentPath -Value $agentScript -Encoding UTF8 -Force
 
-    # Crear/actualizar tarea programada: cada 3 días a las 8am, sin ventana
+    # Crear/actualizar tarea programada: revisa cada 15 min (barato), solo hace
+    # el escaneo completo cuando el servidor dice que toca (ciclo de 3 dias o
+    # pedido de "Actualizar ahora" desde la web)
     $action    = New-ScheduledTaskAction -Execute "powershell.exe" \`
-                   -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -NonInteractive -File \`"$agentPath\`""
-    $trigger   = New-ScheduledTaskTrigger -Daily -DaysInterval 3 -At "08:00"
+                   -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -NonInteractive -File \`"$agentPath\`" -Scheduled"
+    $trigger   = New-ScheduledTaskTrigger -Once -At (Get-Date) \`
+                   -RepetitionInterval (New-TimeSpan -Minutes 15) \`
+                   -RepetitionDuration (New-TimeSpan -Days 3650)
     $settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 1) \`
                    -StartWhenAvailable -RunOnlyIfNetworkAvailable
     $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
@@ -280,7 +304,7 @@ try {
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger \`
         -Settings $settings -Principal $principal -Force | Out-Null
 
-    Write-Host "  OK  Tarea programada instalada (cada 3 dias, automatica)" -ForegroundColor Green
+    Write-Host "  OK  Tarea programada instalada (revisa cada 15 min)" -ForegroundColor Green
     Write-Host "      Archivo : $agentPath"                                  -ForegroundColor DarkGray
     Write-Host "      Tarea   : $taskName"                                   -ForegroundColor DarkGray
 } catch {

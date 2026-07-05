@@ -35,11 +35,12 @@ export async function POST(req: NextRequest) {
   // Upsert by tenantId + hostname
   const existing = await prisma.asset.findFirst({ where: { tenantId, hostname } });
 
+  // No incluye "status": un admin puede haber marcado el activo como Retirado,
+  // en Mantenimiento, etc. — el agente solo reporta hardware, nunca pisa ese estado.
   const data = {
     tenantId,
     name:         hostname ?? "Equipo desconocido",
     type:         (assetType === "LAPTOP" ? "LAPTOP" : "DESKTOP") as "LAPTOP" | "DESKTOP",
-    status:       "ACTIVE" as const,
     hostname,
     username,
     ipAddress,
@@ -60,9 +61,13 @@ export async function POST(req: NextRequest) {
 
   let asset;
   if (existing) {
-    asset = await prisma.asset.update({ where: { id: existing.id }, data });
+    asset = await prisma.asset.update({
+      where: { id: existing.id },
+      // La sync ya atendió cualquier pedido de "Actualizar ahora" pendiente.
+      data:  { ...data, refreshRequestedAt: null },
+    });
   } else {
-    asset = await prisma.asset.create({ data });
+    asset = await prisma.asset.create({ data: { ...data, status: "ACTIVE" } });
   }
 
   return NextResponse.json({ id: asset.id, name: asset.name }, { status: 200 });

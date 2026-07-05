@@ -129,6 +129,25 @@ export const assetsRouter = router({
       return prisma.asset.delete({ where: { id: input.id } });
     }),
 
+  // ── Pedir que el agente actualice este activo (revisa cada ~15 min) ─────────
+  requestRefresh: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const existing = await prisma.asset.findFirst({
+        where: { id: input.id, tenantId: ctx.session.user.tenantId },
+      });
+      if (!existing) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Activo no encontrado" });
+      }
+      if (!existing.hostname) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Este activo no tiene agente instalado" });
+      }
+      return prisma.asset.update({
+        where: { id: input.id },
+        data:  { refreshRequestedAt: new Date() },
+      });
+    }),
+
   // ── Generate / regenerate agent token (admin only) ──────────────────────────
   generateToken: protectedProcedure.mutation(async ({ ctx }) => {
     requireAdmin(ctx.session.user.role);

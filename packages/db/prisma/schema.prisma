@@ -258,6 +258,7 @@ model Asset {
   agentVersion String?
   lastSeenAt   DateTime?
   hardwareData Json?
+  refreshRequestedAt DateTime? // "Actualizar ahora" pedido desde la web, pendiente de que el agente lo recoja
 
   tenant  Tenant   @relation(fields: [tenantId], references: [id])
   tickets Ticket[]
