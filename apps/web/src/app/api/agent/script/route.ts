@@ -101,7 +101,7 @@ param([switch]$Scheduled)
 
 $API_URL   = "APP_URL_PLACEHOLDER"
 $API_TOKEN = "TOKEN_PLACEHOLDER"
-$AGENT_VER = "1.3.0"
+$AGENT_VER = "1.3.1"
 
 # Forzar TLS 1.2 (requerido en Windows 7/8/Server 2012 y algunos Win10 viejos)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -178,6 +178,12 @@ $biosRaw     = Get-CimInstance Win32_BIOS
 $mbData      = @{ manufacturer = $mbRaw.Manufacturer.Trim(); product = $mbRaw.Product.Trim(); serial = $mbRaw.SerialNumber.Trim() }
 $biosData    = @{ manufacturer = $biosRaw.Manufacturer; version = $biosRaw.SMBIOSBIOSVersion; serial = $biosRaw.SerialNumber }
 
+# Marca/modelo/serial "oficiales" del equipo (no de la placa) — para Marca/Modelo/N. serie
+$csRaw     = Get-CimInstance Win32_ComputerSystem
+$sysBrand  = $csRaw.Manufacturer.Trim()
+$sysModel  = $csRaw.Model.Trim()
+$sysSerial = $biosRaw.SerialNumber.Trim()
+
 # ---- [6/10] Tarjeta grafica ----
 Write-Host "  [6/10] Tarjeta grafica..." -ForegroundColor Yellow
 $gpuData = @(Get-CimInstance Win32_VideoController) | ForEach-Object {
@@ -248,6 +254,9 @@ $body = @{
     ramGB        = $ramTotalGB
     diskInfo     = $diskInfo
     motherboard  = $motherboard
+    brand        = $sysBrand
+    model        = $sysModel
+    serialNumber = $sysSerial
     agentVersion = $AGENT_VER
     assetType    = $assetType
     hardwareData = $hwData

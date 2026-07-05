@@ -27,6 +27,9 @@ export async function POST(req: NextRequest) {
     ramGB,
     diskInfo,
     motherboard,
+    brand,
+    model,
+    serialNumber,
     agentVersion,
     assetType,
     hardwareData,
@@ -50,6 +53,11 @@ export async function POST(req: NextRequest) {
     ramGB:        ramGB != null ? parseInt(String(ramGB)) : null,
     diskInfo,
     motherboard,
+    // Marca/Modelo/N. serie: el agente solo los completa si están vacíos —
+    // si un admin ya los editó a mano, esa edición no se pisa en la próxima sync.
+    brand:        existing?.brand        ?? (brand        || null),
+    model:        existing?.model        ?? (model        || null),
+    serialNumber: existing?.serialNumber ?? (serialNumber || null),
     agentVersion,
     lastSeenAt:   new Date(),
     hardwareData: hardwareData
