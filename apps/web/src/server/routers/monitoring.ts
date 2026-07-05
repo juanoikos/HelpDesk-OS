@@ -27,7 +27,12 @@ const targetInput = z.object({
 //    por el scanner de red para un NetworkDevice. Usada por importFromNetwork
 //    (import masivo) y pingNetworkDevice (import puntual desde el botón de ping). ──
 function buildTargetDataForDevice(d: { ip: string; hostname: string | null; vendor: string | null; openPorts: unknown }) {
-  const ports = (d.openPorts as number[] | null) ?? [];
+  // El agente PS1 serializa un array de un solo puerto como número suelto (no [n]),
+  // así que openPorts puede llegar como number[], un number, null o undefined.
+  const raw   = d.openPorts;
+  const ports = Array.isArray(raw)
+    ? raw.filter((p): p is number => typeof p === "number")
+    : typeof raw === "number" ? [raw] : [];
 
   let checkType: "http" | "https" | "tcp" | "ping" = "ping";
   let port: number | undefined;

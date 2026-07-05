@@ -20,6 +20,14 @@ interface ScanBody {
   devices: DeviceInput[];
 }
 
+// El agente PS1 serializa un array de un solo puerto como número suelto (no [n]),
+// así que openPorts puede llegar como number[], un number, null o undefined.
+function normalizePorts(openPorts: unknown): number[] {
+  if (Array.isArray(openPorts)) return openPorts.filter((p): p is number => typeof p === "number");
+  if (typeof openPorts === "number") return [openPorts];
+  return [];
+}
+
 export async function POST(req: NextRequest) {
   // ── Autenticación ──────────────────────────────────────────────────────────
   const auth = req.headers.get("authorization");
@@ -75,7 +83,7 @@ export async function POST(req: NextRequest) {
           vendor:     device.vendor ?? null,
           hostname:   device.hostname ?? null,
           deviceType: device.deviceType ?? "unknown",
-          openPorts:  device.openPorts ?? [],
+          openPorts:  normalizePorts(device.openPorts),
           httpTitle:  device.httpTitle ?? null,
           onvif:      device.onvif ?? false,
           lastSeenAt: now,
@@ -89,7 +97,7 @@ export async function POST(req: NextRequest) {
           vendor:     device.vendor ?? null,
           hostname:   device.hostname ?? null,
           deviceType: device.deviceType ?? "unknown",
-          openPorts:  device.openPorts ?? [],
+          openPorts:  normalizePorts(device.openPorts),
           httpTitle:  device.httpTitle ?? null,
           onvif:      device.onvif ?? false,
           lastSeenAt: now,

@@ -110,6 +110,14 @@ function usePingLive() {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// El agente PS1 serializa un array de un solo puerto como número suelto (no [n]),
+// así que openPorts puede llegar como number[], un number, null o undefined.
+function toPortsArray(openPorts: unknown): number[] {
+  if (Array.isArray(openPorts)) return openPorts.filter((p): p is number => typeof p === "number");
+  if (typeof openPorts === "number") return [openPorts];
+  return [];
+}
+
 function relativeTime(date: Date | string | null): string {
   if (!date) return "—";
   const diff = Date.now() - new Date(date).getTime();
@@ -257,7 +265,7 @@ function ConnectModal({
   const [showPass, setShowPass] = useState(false);
   const [copied,   setCopied]   = useState("");
 
-  const ports   = (device.openPorts as number[] | null) ?? [];
+  const ports   = toPortsArray(device.openPorts);
   const options = getConnectOptions(device.deviceType, ports);
 
   function buildUrl(opt: ConnectOption): string {
@@ -651,7 +659,7 @@ export default function NetworkPage() {
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {filtered.map((device) => {
-                  const ports   = (device.openPorts as number[] | null) ?? [];
+                  const ports   = toPortsArray(device.openPorts);
                   const options = getConnectOptions(device.deviceType, ports);
                   const bestOpt = options[0];
 
@@ -769,7 +777,7 @@ export default function NetworkPage() {
                             const latency = pingLatencies[device.ip];
                             return (
                               <button
-                                onClick={() => ping(device.ip, device.openPorts as number[] ?? [])}
+                                onClick={() => ping(device.ip, toPortsArray(device.openPorts))}
                                 disabled={state === "pinging"}
                                 title="Ping desde tu navegador (requiere estar en la misma red)"
                                 className={`text-xs px-2.5 py-1 rounded-lg border font-mono transition-colors whitespace-nowrap
