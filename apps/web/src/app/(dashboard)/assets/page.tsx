@@ -1,7 +1,7 @@
 "use client";
 
 import { trpc } from "@/trpc/react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -260,6 +260,47 @@ function HardwareDetail({ asset, isAdmin, onClose }: { asset: ReturnType<typeof 
     retireMut.mutate({ id: asset.id, status: goingToRetire ? "RETIRED" : "ACTIVE" });
   };
 
+  // ── Actualizar ahora: pide al agente instalado que reenvíe el inventario ────
+  const [refreshState, setRefreshState] = useState<"idle" | "waiting" | "done" | "timeout">("idle");
+  const refreshTimersRef = useRef<{ interval: ReturnType<typeof setInterval>; timeout: ReturnType<typeof setTimeout> } | null>(null);
+  const requestRefreshMut = trpc.assets.requestRefresh.useMutation();
+
+  const clearRefreshTimers = () => {
+    if (refreshTimersRef.current) {
+      clearInterval(refreshTimersRef.current.interval);
+      clearTimeout(refreshTimersRef.current.timeout);
+      refreshTimersRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    setRefreshState("idle");
+    clearRefreshTimers();
+    return clearRefreshTimers;
+  }, [asset.id]);
+
+  const handleRequestRefresh = () => {
+    const requestedAt = Date.now();
+    requestRefreshMut.mutate({ id: asset.id }, {
+      onSuccess: () => {
+        setRefreshState("waiting");
+        const interval = setInterval(async () => {
+          const fresh = await utils.assets.getById.fetch({ id: asset.id });
+          if (fresh.lastSeenAt && new Date(fresh.lastSeenAt).getTime() >= requestedAt) {
+            clearRefreshTimers();
+            setRefreshState("done");
+            utils.assets.list.invalidate();
+          }
+        }, 20_000);
+        const timeout = setTimeout(() => {
+          clearRefreshTimers();
+          setRefreshState("timeout");
+        }, 20 * 60_000);
+        refreshTimersRef.current = { interval, timeout };
+      },
+    });
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-start justify-end z-50">
       <div className="bg-slate-900 border-l border-slate-700 w-full max-w-2xl h-full overflow-y-auto">
@@ -273,6 +314,22 @@ function HardwareDetail({ asset, isAdmin, onClose }: { asset: ReturnType<typeof 
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {asset.hostname && (
+              <button
+                onClick={handleRequestRefresh}
+                disabled={requestRefreshMut.isPending || refreshState === "waiting"}
+                className={`text-xs transition-colors disabled:opacity-50 ${
+                  refreshState === "done" ? "text-green-400" :
+                  refreshState === "timeout" ? "text-amber-400" :
+                  "text-slate-500 hover:text-blue-400"}`}
+                title="Pide al agente instalado en este equipo que envíe los datos de nuevo (puede tardar hasta ~15 min)"
+              >
+                {requestRefreshMut.isPending || refreshState === "waiting" ? "⏳ Esperando…" :
+                 refreshState === "done"    ? "✓ Actualizado" :
+                 refreshState === "timeout" ? "⚠ Sigue pendiente" :
+                 "🔄 Actualizar ahora"}
+              </button>
+            )}
             <button
               onClick={handleToggleRetired}
               disabled={retireMut.isPending}
