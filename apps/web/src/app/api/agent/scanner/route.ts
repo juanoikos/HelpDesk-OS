@@ -46,7 +46,10 @@ export async function GET(req: NextRequest) {
     .replace(/APP_URL_PLACEHOLDER/g, server)
     .replace(/TOKEN_PLACEHOLDER/g,   token);
 
-  const b64      = Buffer.from(ps1Content, "utf8").toString("base64");
+  // BOM UTF-8 al inicio: sin esto, Windows PowerShell 5.1 lee el .ps1 con la
+  // página de códigos ANSI del sistema en vez de UTF-8, y corrompe caracteres
+  // como "—" (rompe el parseo de todo lo que sigue).
+  const b64      = Buffer.from("﻿" + ps1Content, "utf8").toString("base64");
   const b64Lines = b64.match(/.{1,64}/g) ?? [];
 
   const echoLines = b64Lines

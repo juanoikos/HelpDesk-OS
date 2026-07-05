@@ -49,7 +49,10 @@ export async function GET(req: NextRequest) {
     .replace(/TOKEN_PLACEHOLDER/g,   token);
 
   // Codificar PS1 en base64 y partir en líneas de 64 chars (formato certutil)
-  const b64      = Buffer.from(ps1Content, "utf8").toString("base64");
+  // BOM UTF-8 al inicio: sin esto, Windows PowerShell 5.1 lee el .ps1 con la
+  // página de códigos ANSI del sistema en vez de UTF-8, y corrompe caracteres
+  // especiales (rompe el parseo de todo lo que sigue).
+  const b64      = Buffer.from("﻿" + ps1Content, "utf8").toString("base64");
   const b64Lines = b64.match(/.{1,64}/g) ?? [];
 
   // Primeras líneas con > (crear), resto con >> (añadir)
