@@ -603,13 +603,16 @@ model DvrAlarm {
 
 // ─── Tunnel del agente local (go2rtc + cloudflared) ─────────────────────────
 
+606
 model AgentTunnel {
-  id        String   @id @default(cuid())
-  tenantId  String   @unique
-  tunnelUrl String                        // https://abc123.trycloudflare.com
-  lastSeen  DateTime @default(now())
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id                 String   @id @default(cuid())
+  tenantId           String   @unique
+  tunnelUrl          String                        // https://vms-<slug>.helpdeskos.co (heartbeat runtime)
+  cloudflareTunnelId String?                        // ID del tunnel en Cloudflare (cfd_tunnel), null si aún no se creó
+  hostname           String?                        // hostname público asignado, ej: vms-altra.helpdeskos.co
+  lastSeen           DateTime @default(now())
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
