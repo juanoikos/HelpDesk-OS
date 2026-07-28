@@ -62,10 +62,17 @@ export async function POST(req: NextRequest) {
   catch { return NextResponse.json({ error: "JSON inválido" }, { status: 400 }); }
 
   const { tunnelUrl } = body;
-  // Solo aceptar URLs de Cloudflare Tunnel — previene SSRF por tunnel malicioso
+  // Solo aceptar URLs de Cloudflare Tunnel — previene SSRF por tunnel malicioso.
+  // Se aceptan dos formas:
+  //   - *.trycloudflare.com   → quick tunnels legacy (agentes viejos sin actualizar)
+  //   - *.helpdeskos.co       → tunnels autenticados por tenant (arquitectura actual)
   const TUNNEL_RE = /^https:\/\/[\w-]+\.trycloudflare\.com$/;
-  if (!tunnelUrl || !TUNNEL_RE.test(tunnelUrl)) {
-    return NextResponse.json({ error: "tunnelUrl inválida — solo se aceptan dominios *.trycloudflare.com" }, { status: 400 });
+  const HELPDESKOS_RE = /^https:\/\/[\w-]+\.helpdeskos\.co$/;
+  if (!tunnelUrl || !(TUNNEL_RE.test(tunnelUrl) || HELPDESKOS_RE.test(tunnelUrl))) {
+    return NextResponse.json(
+      { error: "tunnelUrl inválida — solo se aceptan dominios *.trycloudflare.com o *.helpdeskos.co" },
+      { status: 400 },
+    );
   }
 
   await prisma.agentTunnel.upsert({
