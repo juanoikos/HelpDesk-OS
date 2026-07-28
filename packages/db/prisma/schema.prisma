@@ -603,7 +603,6 @@ model DvrAlarm {
 
 // ─── Tunnel del agente local (go2rtc + cloudflared) ─────────────────────────
 
-606
 model AgentTunnel {
   id                 String   @id @default(cuid())
   tenantId           String   @unique
