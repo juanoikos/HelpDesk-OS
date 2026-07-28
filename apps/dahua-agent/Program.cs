@@ -2,7 +2,7 @@ using System.Text.Json;
 using DahuaAgent.Models;
 using DahuaAgent.Services;
 
-// ─── Graceful shutdown con Ctrl+C ────────────────────────────────────────────
+// ─── Graceful shutdown con Ctrl+C ──────────────────────────────────────────────
 var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
 {
@@ -11,14 +11,14 @@ Console.CancelKeyPress += (_, e) =>
     cts.Cancel();
 };
 
-// ─── Configuración ────────────────────────────────────────────────────────────
+// ─── Configuración ──────────────────────────────────────────────
 var configPath = Path.Combine(AppContext.BaseDirectory, "config.json");
 
 if (!File.Exists(configPath))
 {
     var def = new AgentConfig();
     File.WriteAllText(configPath, JsonSerializer.Serialize(def,
-        new JsonSerializerOptions { WriteIndented = true }));
+                                                           new JsonSerializerOptions { WriteIndented = true }));
     Console.WriteLine("✅ config.json generado. Edítalo con tu ServerUrl y AgentToken.");
     Console.WriteLine($"   Ruta: {configPath}");
     Console.ReadKey();
@@ -36,34 +36,34 @@ if (config.AgentToken == "PEGAR_AQUI_EL_TOKEN_DEL_AGENTE")
     return;
 }
 
-// ─── Banner ───────────────────────────────────────────────────────────────────
+// ─── Banner ────────────────────────────────────────────────────
 Console.WriteLine();
-Console.WriteLine("  ╔═══════════════════════════════════════════════╗");
-Console.WriteLine("  ║   HelpDesk OS — Agente Dahua (Dahua.Api)     ║");
-Console.WriteLine("  ╚═══════════════════════════════════════════════╝");
-Console.WriteLine($"  🔗 Servidor  : {config.ServerUrl}");
-Console.WriteLine($"  ⏱  Polling   : cada {config.PollIntervalSeconds}s");
-Console.WriteLine($"  📺 Live View : {(config.EnableLiveView ? "ACTIVADO" : "desactivado")}");
+Console.WriteLine("  ╔═══════════════════════════════╗");
+Console.WriteLine("  ║      HelpDesk OS — Agente Dahua (Dahua.Api)      ║");
+Console.WriteLine("  ╚═══════════════════════════════╝");
+Console.WriteLine($"  🔗 Servidor    : {config.ServerUrl}");
+Console.WriteLine($"  ⏱ Polling     : cada {config.PollIntervalSeconds}s");
+Console.WriteLine($"  📺 Live View   : {(config.EnableLiveView ? "ACTIVADO" : "desactivado")}");
 Console.WriteLine($"  📅 {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 Console.WriteLine();
 
-// ─── Inicializar SDK Dahua ────────────────────────────────────────────────────
+// ─── Inicializar SDK Dahua ──────────────────────────────────────
 DvrService.Init();
 
-// ─── Clientes ─────────────────────────────────────────────────────────────────
+// ─── Clientes ────────────────────────────────────────────────────
 var api = new ApiClient(config.ServerUrl, config.AgentToken);
 
-// ─── Tunnel Live View (opcional) ─────────────────────────────────────────────
+// ─── Tunnel Live View (opcional) ─────────────────────────────────────
 TunnelService? tunnel = null;
 if (config.EnableLiveView)
 {
-    tunnel = new TunnelService(api, config.LiveViewPort);
+    tunnel = new TunnelService(api, config.TunnelToken, config.TunnelHostname, config.LiveViewPort);
     await tunnel.StartAsync(cts.Token);
 }
 
 Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] Esperando trabajos...\n");
 
-// ─── Bucle principal ──────────────────────────────────────────────────────────
+// ─── Bucle principal ────────────────────────────────────────────
 int backoff = config.PollIntervalSeconds;
 
 while (!cts.Token.IsCancellationRequested)
@@ -91,8 +91,8 @@ while (!cts.Token.IsCancellationRequested)
                 {
                     result = new JobResult
                     {
-                        JobId        = job.JobId,
-                        Success      = false,
+                        JobId = job.JobId,
+                        Success = false,
                         ErrorMessage = $"Acción '{job.Action}' no implementada aún.",
                     };
                 }
@@ -104,7 +104,7 @@ while (!cts.Token.IsCancellationRequested)
         }
         else
         {
-            Console.Write($"\r[{DateTime.Now:HH:mm:ss}] Sin trabajos. Siguiente poll en {backoff}s...   ");
+            Console.Write($"\r[{DateTime.Now:HH:mm:ss}] Sin trabajos. Siguiente poll en {backoff}s... ");
         }
 
         await Task.Delay(backoff * 1000, cts.Token);
@@ -115,7 +115,7 @@ while (!cts.Token.IsCancellationRequested)
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"\n[{DateTime.Now:HH:mm:ss}] ⚠️  Error: {ex.Message}");
+        Console.WriteLine($"\n[{DateTime.Now:HH:mm:ss}] ⚠️ Error: {ex.Message}");
         // Backoff exponencial hasta 60s
         backoff = Math.Min(backoff * 2, 60);
         Console.WriteLine($"   Reintentando en {backoff}s...");
@@ -123,7 +123,7 @@ while (!cts.Token.IsCancellationRequested)
     }
 }
 
-// ─── Cleanup ──────────────────────────────────────────────────────────────────
+// ─── Cleanup ────────────────────────────────────────────────────
 if (tunnel is not null) await tunnel.DisposeAsync();
 DvrService.Cleanup();
 Console.WriteLine($"\n[{DateTime.Now:HH:mm:ss}] Agente detenido. ¡Hasta luego!");
