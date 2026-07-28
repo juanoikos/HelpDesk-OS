@@ -1,5 +1,5 @@
 # HelpDesk OS — Resumen Completo del Proyecto
-> Actualizado: 2026-06-25
+> Actualizado: 2026-07-28
 
 ---
 
@@ -35,13 +35,16 @@ Construido por Juan Pablo Morales para D&C Computer SAS, con visión de escalarl
   railway variables --set "KEY=value"
   railway status
   ```
+- **Backups automáticos de Postgres → Cloudflare R2** (nuevo — 2026-07-28): workflow `.github/workflows/postgres-backup.yml`, corre cada 6 horas vía GitHub Actions (Railway Hobby no incluye backups/PITR). Usa `docker run postgres:18 pg_dump` (no el `pg_dump` de Ubuntu del runner, que es v16 y falla en silencio contra un Postgres v18) + `set -o pipefail` + `test -s` para verificar que el dump no esté vacío. Sube a `s3://<bucket>/backups/postgres/` en el mismo bucket R2 de la app y borra automáticamente backups más viejos que los últimos 30.
+- **Dominio propio para tunnels:** `helpdeskos.co` (GoDaddy, nameservers apuntando a Cloudflare). Zone ID: `05412f6625c8b347a9ac67c8b36c183b`. Account ID Cloudflare: `cfaba925c4046955197eef7012fce9b1`.
+- ⚠️ **Rama por defecto en GitHub:** es `master` (se corrigió en 2026-07-28 — antes era `main`, que estaba 121+ commits atrás y por eso los cron de GitHub Actions no corrían: los triggers `schedule` solo funcionan en la rama por defecto).
 
 ### Variables de entorno en Railway
 ```
 DATABASE_URL          → PostgreSQL interno Railway
 AUTH_SECRET           → JWT secret
 AUTH_URL              → https://helpdesk-os-production.up.railway.app
-RESEND_API_KEY        → re_e9wPUNkD_NwDM9f9xduFovtFovbjsByMv
+RESEND_API_KEY        → (privado)
 EMAIL_FROM            → HelpDesk OS <onboarding@resend.dev>
 R2_ACCOUNT_ID         → cfaba925c4046955197eef7012fce9b1
 R2_ACCESS_KEY_ID      → b055d11be0ea634af59a266faab1c867
@@ -49,6 +52,11 @@ R2_SECRET_ACCESS_KEY  → (privado)
 R2_BUCKET_NAME        → helpdesk-attachments
 R2_PUBLIC_URL         → https://pub-e6d29f7bdc1442c9801e662bce630b61.r2.dev
 ANTHROPIC_API_KEY     → (privado)
+CLOUDFLARE_API_TOKEN  → ⚠️ PENDIENTE de configurar (ver sección "Pendientes"). Sin esta variable,
+                         la automatización de Cloudflare Tunnel por tenant falla en silencio y
+                         Live View queda desactivado, pero nada más se rompe.
+CLOUDFLARE_ACCOUNT_ID → cfaba925c4046955197eef7012fce9b1 (opcional, ya viene con default hardcodeado)
+CLOUDFLARE_ZONE_ID    → 05412f6625c8b347a9ac67c8b36c183b (opcional, ya viene con default hardcodeado)
 ```
 
 ---
@@ -194,15 +202,27 @@ GET  /api/agent/dvr-jobs              → jobs pendientes para agente C# (Bearer
 GET  /api/dvr/download?dvrId=&filePath= → proxy descarga MP4
 ```
 
-### Agente C# — Acceso Remoto via P2P
+### Agente C# — NuGet Dahua.Api + Cloudflare Tunnel (reescrito — 2026-07-28)
 **Ubicación:** `apps/dahua-agent/`
-**Sin dependencias externas** — solo .NET 8
+**.NET 8**, usa el paquete NuGet `Dahua.Api` para RPC2 (reemplazó la implementación P2P/UDP propia — `DahuaP2P.cs`/`DahuaRPC.cs` ya no existen).
+
+**Live View en vivo (nuevo):** el agente ahora puede exponer streaming en vivo de los DVRs locales al navegador, vía **go2rtc + Cloudflare Tunnel autenticado con token** (no el `trycloudflare.com` quick-tunnel original, que no es apto para producción — no tiene hostname fijo y expira).
 
 **Flujo:**
 ```
-Agente → UDP → dev.easy4ip.com:3000 (serial) → IP actual del DVR
-Agente → HTTP RPC2 → DVR (auth MD5) → busca grabaciones
+Agente → Dahua.Api (RPC2) → DVR local → busca grabaciones
 Agente → POST HelpDesk OS /api/agent/dvr-scan → resultados
+Agente → go2rtc (puerto 1984) → cloudflared (token) → https://vms-<slug>.helpdeskos.co → navegador
+Agente → POST /api/agent/tunnel-register (heartbeat cada 4 min) → marca el tunnel como activo en DB
+```
+
+**Archivos clave:**
+```
+apps/dahua-agent/
+├── Program.cs
+├── Models/AgentConfig.cs      # ServerUrl, AgentToken, TunnelToken, TunnelHostname, EnableLiveView
+├── Services/ApiClient.cs      # RegisterTunnelAsync / UnregisterTunnelAsync (heartbeat)
+└── Services/TunnelService.cs  # descarga go2rtc.exe + cloudflared.exe, los orquesta
 ```
 
 **Compilar:**
@@ -210,20 +230,32 @@ Agente → POST HelpDesk OS /api/agent/dvr-scan → resultados
 cd apps/dahua-agent
 dotnet publish -c Release -r win-x64
 # Ejecutable: bin/Release/net8.0/win-x64/publish/DahuaAgent.exe
+# CI: workflow "Build & Publish Dahua Agent" sube el .zip a R2 automáticamente en cada push a master
 ```
 
-**config.json:**
+**config.json (generado automáticamente por el servidor al descargar el agente desde /activos):**
 ```json
 {
-  "HelpdeskUrl": "https://helpdesk-os-production.up.railway.app",
+  "ServerUrl": "https://helpdesk-os-production.up.railway.app",
   "AgentToken": "TOKEN_DEL_AGENTE",
-  "PollIntervalSec": 10
+  "PollIntervalSeconds": 10,
+  "EnableLiveView": true,
+  "LiveViewPort": 1984,
+  "TunnelToken": "TOKEN_DE_INSTALACION_DEL_TUNNEL_DE_ESTE_TENANT",
+  "TunnelHostname": "vms-<slug>.helpdeskos.co"
 }
 ```
 
-**Estado:** ⚠️ Pendiente compilar y probar (2026-06-05)
-- Opción A (recomendada): usar DLLs del Dahua NetSDK — descargar zip de dahuasecurity.com
-- Opción B (actual): implementación P2P propia via UDP (puede no ser 100% compatible)
+**Automatización de Cloudflare Tunnel por tenant (nuevo — 2026-07-28):**
+`apps/web/src/lib/cloudflare.ts` expone `ensureTunnelForTenant(tenantId, slug)`, llamada desde `GET /api/agent/dahua-download`. Por cada tenant, crea (o reutiliza) un Cloudflare Tunnel remotely-managed vía API:
+1. Crea el tunnel (`POST /accounts/{id}/cfd_tunnel`)
+2. Configura el ingress: `vms-<slug>.helpdeskos.co` → `http://localhost:1984`
+3. Crea/actualiza el registro DNS CNAME (idempotente — verifica si ya existe antes de crear, para tolerar reintentos)
+4. Devuelve el `TunnelToken` de instalación (se puede pedir de nuevo cuantas veces se quiera, no es de un solo uso) y el hostname, que se incrustan en el `config.json` del agente descargado.
+
+Requiere la variable `CLOUDFLARE_API_TOKEN` en Railway (ver sección "Pendientes"). Si no está configurada, la descarga del agente sigue funcionando normal — solo Live View queda desactivado, sin romper nada más (falla contenida en un `try/catch`).
+
+**Estado:** ✅ Compilado, en CI, y con automatización de tunnel por tenant funcionando en producción (validado con deploy exitoso el 2026-07-28). ⚠️ Pendiente: probar Live View end-to-end contra un DVR Dahua físico real (no se ha hecho todavía — falta acceso a hardware).
 
 ---
 
@@ -254,18 +286,24 @@ helpdesk-os/
 │   │       │   ├── assets.ts
 │   │       │   ├── networkDevices.ts # + cruce con activos
 │   │       │   └── dvrs.ts           # DVRs + credenciales + jobs + grabaciones
-│   │       └── app/api/agent/
-│   │           ├── script/           # .bat agente hardware
-│   │           ├── scanner/          # .bat scanner red (PS1 multi-método)
-│   │           ├── inventory/        # POST datos hardware
-│   │           ├── network-scan/     # POST datos red + auto-DVR
-│   │           ├── dvr-script/       # .bat agente DVR local
-│   │           ├── dvr-scan/         # POST resultados DVR
-│   │           └── dvr-jobs/         # GET jobs pendientes agente C#
-│   ├── dahua-agent/                  # Agente C# P2P
+│   │       ├── app/api/agent/
+│   │       │   ├── script/           # .bat agente hardware
+│   │       │   ├── scanner/          # .bat scanner red (PS1 multi-método)
+│   │       │   ├── inventory/        # POST datos hardware
+│   │       │   ├── network-scan/     # POST datos red + auto-DVR
+│   │       │   ├── dvr-script/       # .bat agente DVR local
+│   │       │   ├── dvr-scan/         # POST resultados DVR
+│   │       │   ├── dvr-jobs/         # GET jobs pendientes agente C#
+│   │       │   ├── dahua-download/   # GET .zip del agente con config.json + tunnel (nuevo)
+│   │       │   └── tunnel-register/  # POST heartbeat del tunnel del agente (nuevo)
+│   │       └── lib/
+│   │           ├── r2.ts             # Cliente S3-compatible para Cloudflare R2
+│   │           └── cloudflare.ts     # ensureTunnelForTenant() — automatización de tunnels (nuevo)
+│   ├── dahua-agent/                  # Agente C# — Dahua.Api NuGet + Cloudflare Tunnel
 │   │   ├── Program.cs
-│   │   ├── DahuaP2P.cs              # Resolución IP via Easy4IP UDP
-│   │   ├── DahuaRPC.cs              # RPC2 JSON + auth MD5
+│   │   ├── Models/AgentConfig.cs
+│   │   ├── Services/ApiClient.cs
+│   │   ├── Services/TunnelService.cs # go2rtc + cloudflared (Live View)
 │   │   └── DahuaAgent.csproj
 │   ├── agent/main.go                 # Agente Go hardware (pendiente compilar)
 │   └── scanner/main.go              # Scanner Go (pendiente compilar)
@@ -296,34 +334,40 @@ helpdesk-os/
 | **Dvr** | DVR/NVR con serial, IPs, credenciales |
 | **DvrCredential** | Credencial global por tenant (cifrada) |
 | **DvrScanJob** | Trabajos de búsqueda de grabaciones |
+| **AgentTunnel** | Tunnel de Cloudflare por tenant para Live View (`cloudflareTunnelId`, `hostname`, heartbeat) |
+| **DvrAlarm** | Alarmas recibidas del DVR (VideoMotion, VideoLoss, etc.) → crea ticket automático |
 
 ---
 
-## Pendientes (actualizado 2026-06-25)
+## Pendientes (actualizado 2026-07-28)
 
 ### 🔴 Alta Prioridad
-1. **Dominio Resend** — verificar `dyccomputersas.com` en Resend + DNS → emails a Camilo
-2. **Agente C# Dahua** — compilar y probar acceso P2P via serial
-   - Recomendado: usar DLLs del Dahua NetSDK (Opción A)
-   - Descargar de: dahuasecurity.com/support → General SDK → Windows → C#
+1. **`CLOUDFLARE_API_TOKEN` en Railway** — sin esto, `ensureTunnelForTenant()` falla en silencio y Live View queda desactivado (nada más se rompe). Crear en Cloudflare con permisos `Account.Cloudflare Tunnel: Edit` + `Zone.DNS: Edit`, scope solo sobre la zona `helpdeskos.co`. Juan Pablo debe crearlo y pegarlo él mismo (no delegado a Claude/automatización, por manejo de secretos).
+2. **Probar Live View con DVR Dahua físico real** — la automatización de tunnel por tenant y el agente ya están en producción, pero falta validar contra hardware real (sugerido: DVR de Camilo, IP `192.168.1.15`).
+3. **Dominio Resend** — verificar `dyccomputersas.com` en Resend + DNS → emails a Camilo
 
 ### 🟠 Media Prioridad
-3. **Inventario de activos — CRUD manual** — agregar/editar activos sin necesidad del agente
-4. **Agente PS1 DVR local** — probar con DVR 192.168.1.15 (Camilo, puerto 80, RPC2)
-5. **Ping desde Monitor de Red** — botón ping por IP en /network
-6. **PWA (app móvil)** — instalable Android/iOS
+4. **Inventario de activos — CRUD manual** — agregar/editar activos sin necesidad del agente
+5. **Agente PS1 DVR local** — probar con DVR 192.168.1.15 (Camilo, puerto 80, RPC2)
+6. **Ping desde Monitor de Red** — botón ping por IP en /network
+7. **PWA (app móvil)** — instalable Android/iOS
+8. **Limpieza:** borrar el tunnel manual de prueba `dahua-agent-dyc-test` (`vms.helpdeskos.co`) en Cloudflare — quedó huérfano una vez que la automatización crea `vms-<slug>.helpdeskos.co` por tenant.
 
 ### 🟡 Baja Prioridad
-7. Portal de autoservicio (sin cuenta)
-8. Base de conocimiento
-9. WhatsApp Baileys (canal gratuito QR)
-10. Reportes avanzados (exportar PDF)
+9. Portal de autoservicio (sin cuenta)
+10. Base de conocimiento
+11. WhatsApp Baileys (canal gratuito QR)
+12. Reportes avanzados (exportar PDF)
 
 ---
 
 ## Bugs Conocidos
 - Ninguno de TypeScript pendiente (todos resueltos el 2026-06-25)
 - Scanner de red: probar `.bat` actualizado (v2.0 multi-subred) con Camilo en su red
+
+### Corregidos el 2026-07-28
+- **`pg_dump` versión incorrecta en backups:** el workflow de backups usaba `pg_dump` v16 de Ubuntu contra un Postgres v18 de Railway → fallaba en silencio (el pipe con `gzip` ocultaba el error, subía un backup vacío/corrupto con el step en verde). Corregido usando `docker run postgres:18 pg_dump` + `pipefail` + verificación de tamaño.
+- **`tunnel-register` rechazaba el hostname nuevo:** el endpoint `POST /api/agent/tunnel-register` solo aceptaba URLs `*.trycloudflare.com` — al migrar a tunnels autenticados con hostname fijo (`*.helpdeskos.co`), el heartbeat del agente fallaba con 400 en silencio (capturado por un `try/catch` en `TunnelService.cs`) y `vmsRouter.status` nunca marcaba el tunnel como activo. Corregido para aceptar ambos formatos.
 
 ---
 
