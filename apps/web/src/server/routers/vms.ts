@@ -28,7 +28,7 @@ async function getDvrCreds(dvrId: string, tenantId: string) {
 
 export const vmsRouter = router({
 
-  // â”€â”€ Estado del mÃ³dulo VMS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ Estado del mÃ³dulo VMS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   status: adminProcedure.query(async ({ ctx }) => {
     const tenantId = ctx.session.user.tenantId;
 
@@ -38,11 +38,14 @@ export const vmsRouter = router({
         select: {
           id: true, name: true, status: true, channels: true,
           localIp: true, ip: true,
-          serial: true, location: true, photoUrl: true,
+          serial: true, address: true, photoUrl: true,
           deviceModel: true, firmware: true, deviceType: true,
         },
       }),
-      prisma.agentTunnel.findUnique({ where: { tenantId } }),
+      // findFirst, no findUnique: tenantId ya no es Ãºnico en AgentTunnel
+      // (ahora un tenant puede tener varias sedes, cada una con su propio tÃºnel).
+      // Mientras solo exista una sede por tenant, esto devuelve el mismo tunnel de siempre.
+      prisma.agentTunnel.findFirst({ where: { tenantId } }),
     ]);
 
     return {
@@ -64,7 +67,7 @@ export const vmsRouter = router({
       const dvr = await prisma.dvr.findFirst({ where: { id: input.dvrId, tenantId }, select: { id: true } });
       if (!dvr) throw new TRPCError({ code: "NOT_FOUND" });
 
-      const tunnel = await prisma.agentTunnel.findUnique({ where: { tenantId } });
+      const tunnel = await prisma.agentTunnel.findFirst({ where: { tenantId } });
       const useTunnel = !!(tunnel?.isActive && tunnel.tunnelUrl);
 
       await unregisterStream(
@@ -129,7 +132,7 @@ export const vmsRouter = router({
       return { ok: true };
     }),
 
-  // â”€â”€ Alarmas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ Alarmas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   listAlarms: adminProcedure
     .input(z.object({
       limit:   z.number().int().min(1).max(200).default(50),
@@ -188,7 +191,7 @@ export const vmsRouter = router({
     return { total24h: total, unread, byCode: byCode.map(b => ({ code: b.code, count: b._count._all })) };
   }),
 
-  // â”€â”€ E-Map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ E-Map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   listEmaps: adminProcedure.query(async ({ ctx }) => {
     return prisma.eMap.findMany({
       where:   { tenantId: ctx.session.user.tenantId },
@@ -243,7 +246,7 @@ export const vmsRouter = router({
       return { ok: true };
     }),
 
-  // â”€â”€ Config remota â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ Config remota â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   getDeviceConfig: adminProcedure
     .input(z.object({ dvrId: z.string(), channel: z.number().int().min(1).default(1) }))
     .query(async ({ input, ctx }) => {
@@ -267,9 +270,9 @@ export const vmsRouter = router({
       return { ok: true };
     }),
 
-  // â”€â”€ Info del tunnel del agente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ Info del tunnel del agente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   getTunnel: adminProcedure.query(async ({ ctx }) => {
-    const tunnel = await prisma.agentTunnel.findUnique({
+    const tunnel = await prisma.agentTunnel.findFirst({
       where: { tenantId: ctx.session.user.tenantId },
     });
     return tunnel ?? null;
