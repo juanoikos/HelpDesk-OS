@@ -33,7 +33,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string[] }> },
 ) {
-  // ── Autenticación ──────────────────────────────────────────────────────────
+  // ── Autenticación ────────────────────────────────────────────────────────────────────
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
@@ -54,7 +54,7 @@ export async function GET(
   const pbEnd      = isPlayback ? rest[2] : undefined;
   const file       = isPlayback ? (rest.slice(3).join("/") || "index.m3u8") : rest.join("/");
 
-  // ── Verificar go2rtc configurado ───────────────────────────────────────────
+  // ── Verificar go2rtc configurado ────────────────────────────────────────────
   if (!isGo2rtcConfigured()) {
     return NextResponse.json(
       { error: "Live View no configurado — define GO2RTC_URL en Railway" },
@@ -62,11 +62,11 @@ export async function GET(
     );
   }
 
-  // ── Obtener DVR y credenciales ─────────────────────────────────────────────
+  // ── Obtener DVR y credenciales ───────────────────────────────────────────────
   const [dvr, cred, tunnel] = await Promise.all([
     prisma.dvr.findFirst({ where: { id: dvrId, tenantId } }),
     prisma.dvrCredential.findUnique({ where: { tenantId } }),
-    prisma.agentTunnel.findUnique({ where: { tenantId } }),
+    prisma.agentTunnel.findFirst({ where: { tenantId } }),
   ]);
 
   if (!dvr) return NextResponse.json({ error: "DVR no encontrado" }, { status: 404 });
@@ -91,7 +91,7 @@ export async function GET(
   const ip      = dvr.localIp ?? dvr.ip;
   const rtspPort = 554; // Dahua standard
 
-  // ── Nombre del stream y URL RTSP (live vs playback) ──────────────────────
+  // ── Nombre del stream y URL RTSP (live vs playback) ────────────────────────
   let name:    string;
   let rtspUrl: string;
 
@@ -123,7 +123,7 @@ export async function GET(
     }
   }
 
-  // ── Proxy de la petición HLS a go2rtc ─────────────────────────────────────
+  // ── Proxy de la petición HLS a go2rtc ───────────────────────────────────────
   const go2rtcUrl = file === "index.m3u8"
     ? getGo2rtcHlsUrl(name, go2rtcBase)
     : `${(go2rtcBase ?? process.env.GO2RTC_URL)?.replace(/\/$/, "")}/${name}/hls/live/${file}`;
