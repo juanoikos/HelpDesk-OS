@@ -55,6 +55,24 @@ return data as T;
 }
 
 /**
+ * Devuelve la Location (sede) "default" de un tenant, creándola si no existe.
+ *
+ * Puente temporal: mientras no exista UI para que el usuario cree varias
+ * sedes por tenant, cada tenant opera con una sola Location implícita
+ * ("Sede Principal"). El día que se soporten múltiples sedes reales, esta
+ * función deja de usarse aquí y el caller pasa el locationId explícito
+ * que corresponda (el del formulario donde el usuario elige la sede).
+ */
+async function getOrCreateDefaultLocation(tenantId: string) {
+  const existing = await prisma.location.findFirst({
+    where: { tenantId },
+    orderBy: { createdAt: "asc" },
+  });
+  if (existing) return existing;
+  return prisma.location.create({ data: { tenantId, name: "Sede Principal" } });
+}
+
+/**
 * Garantiza que un tenant tenga un Cloudflare Tunnel autenticado, con su
 * hostname público ya enrutado (vms-<slug>.helpdeskos.co → localhost:1984).
 *
@@ -71,8 +89,9 @@ export async function ensureTunnelForTenant(
   slug: string,
   ): Promise<{ tunnelToken: string; hostname: string }> {
   const { apiToken, accountId, zoneId } = getCfConfig();
+  const location = await getOrCreateDefaultLocation(tenantId);
 
-const existing = await prisma.agentTunnel.findUnique({ where: { tenantId } });
+const existing = await prisma.agentTunnel.findUnique({ where: { locationId: location.id } });
 
 // Caso 1: ya existe el tunnel — solo renovar el token de instalación.
 if (existing?.cloudflareTunnelId && existing.hostname) {
@@ -152,9 +171,10 @@ const tokenResp = await cfFetch<CfItemResponse<string>>(
 // 2.5 — Persistir en DB. tunnelUrl arranca igual al hostname; el heartbeat
 // del agente (tunnel-register) lo mantiene actualizado después.
 await prisma.agentTunnel.upsert({
-  where: { tenantId },
+  where: { locationId: location.id },
   create: {
     tenantId,
+    locationId: location.id,
     tunnelUrl: `https://${hostname}`,
     cloudflareTunnelId: tunnelId,
     hostname,
