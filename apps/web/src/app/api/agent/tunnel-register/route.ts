@@ -75,9 +75,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // AgentTunnel ya no se identifica de forma única por tenantId (ahora es
+  // por locationId, porque un tenant puede tener varias sedes). Mientras no
+  // exista UI para elegir sede explícita en el agente, se usa la sede
+  // "default" del tenant — la misma que crea/usa ensureTunnelForTenant().
+  let location = await prisma.location.findFirst({
+    where: { tenantId },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!location) {
+    location = await prisma.location.create({ data: { tenantId, name: "Sede Principal" } });
+  }
+
   await prisma.agentTunnel.upsert({
-    where:  { tenantId },
-    create: { tenantId, tunnelUrl, isActive: true },
+    where:  { locationId: location.id },
+    create: { tenantId, locationId: location.id, tunnelUrl, isActive: true },
     update: { tunnelUrl, isActive: true, lastSeen: new Date() },
   });
 
