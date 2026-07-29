@@ -11,7 +11,7 @@ import { uploadToR2 } from "./r2";
 import { assertNotSsrf } from "./dvr-crypto";
 import { randomUUID } from "crypto";
 
-// ─── Clasificación de eventos ─────────────────────────────────────────────────
+// ─── Clasificación de eventos ───────────────────────────────────────────────────
 
 export const EVENT_SEVERITY: Record<string, "critical" | "high" | "medium" | "low"> = {
   VideoLoss:              "critical",  // ← crea ticket
@@ -28,7 +28,7 @@ export const EVENT_SEVERITY: Record<string, "critical" | "high" | "medium" | "lo
 
 const AUTO_TICKET_CODES = new Set(["VideoLoss", "VideoBlind", "AlarmLocal"]);
 
-// ─── Tipos ────────────────────────────────────────────────────────────────────
+// ─── Tipos ─────────────────────────────────────────────────────────────────────
 
 export interface DahuaEvent {
   code:    string;
@@ -56,7 +56,7 @@ function isDuplicate(key: string): boolean {
   return false;
 }
 
-// ─── SSE clients (notificación en tiempo real) ────────────────────────────────
+// ─── SSE clients (notificación en tiempo real) ────────────────────────────────────
 
 type SseController = ReadableStreamDefaultController<string>;
 const sseClients = new Map<string, Set<SseController>>();
@@ -80,7 +80,7 @@ function notifySseClients(tenantId: string, alarm: object) {
   }
 }
 
-// ─── Procesamiento principal de alarma ───────────────────────────────────────
+// ─── Procesamiento principal de alarma ─────────────────────────────────────────
 
 export async function processAlarm(
   dvr: { id: string; name: string; tenantId: string; ip: string; port: number; localIp: string | null },
@@ -96,7 +96,7 @@ export async function processAlarm(
 
   console.log(`[alarm] ${dvr.name} CH${channel} — ${event.code}`);
 
-  // ── Snapshot del canal afectado ──────────────────────────────────────────
+  // ── Snapshot del canal afectado ──────────────────────────────────────────────
   let snapshotUrl: string | undefined;
   try {
     const ip   = dvr.localIp ?? dvr.ip;
@@ -119,7 +119,7 @@ export async function processAlarm(
     }
   } catch { /* snapshot falla → continuar sin foto */ }
 
-  // ── Guardar alarma en DB ──────────────────────────────────────────────────
+  // ── Guardar alarma en DB ───────────────────────────────────────────────
   const alarm = await prisma.dvrAlarm.create({
     data: {
       tenantId:   dvr.tenantId,
@@ -133,7 +133,7 @@ export async function processAlarm(
     },
   });
 
-  // ── Crear ticket automático para eventos críticos ─────────────────────────
+  // ── Crear ticket automático para eventos críticos ─────────────────────────────
   let ticketId: string | undefined;
   if (AUTO_TICKET_CODES.has(event.code)) {
     ticketId = await createAlarmTicket(dvr, alarm.id, channel, event.code, snapshotUrl);
@@ -145,7 +145,7 @@ export async function processAlarm(
     }
   }
 
-  // ── Notificar browsers via SSE ────────────────────────────────────────────
+  // ── Notificar browsers via SSE ────────────────────────────────────────────────
   notifySseClients(dvr.tenantId, {
     id:          alarm.id,
     dvrId:       dvr.id,
@@ -159,7 +159,7 @@ export async function processAlarm(
   });
 }
 
-// ─── Crear ticket automático ──────────────────────────────────────────────────
+// ─── Crear ticket automático ───────────────────────────────────────────────────
 
 const EVENT_LABELS: Record<string, string> = {
   VideoLoss:  "Pérdida de señal",
@@ -168,7 +168,7 @@ const EVENT_LABELS: Record<string, string> = {
 };
 
 async function createAlarmTicket(
-  dvr: { id: string; name: string; tenantId: string; location?: string | null },
+  dvr: { id: string; name: string; tenantId: string; address?: string | null },
   alarmId: string,
   channel: number,
   code: string,
@@ -184,7 +184,7 @@ async function createAlarmTicket(
     if (!admin) return undefined;
 
     const eventLabel = EVENT_LABELS[code] ?? code;
-    const location   = (dvr as { location?: string | null }).location ?? dvr.name;
+    const location   = (dvr as { address?: string | null }).address ?? dvr.name;
 
     // Número de ticket secuencial
     const last = await prisma.ticket.findFirst({
