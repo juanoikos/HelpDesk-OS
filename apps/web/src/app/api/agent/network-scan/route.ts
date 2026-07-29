@@ -29,7 +29,7 @@ function normalizePorts(openPorts: unknown): number[] {
 }
 
 export async function POST(req: NextRequest) {
-  // ── Autenticación ──────────────────────────────────────────────────────────
+  // ── Autenticación ───────────────────────────────────────────────────────────────
   const auth = req.headers.get("authorization");
   if (!auth?.startsWith("Bearer ")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
 
   const tenantId = settings.tenantId;
 
-  // ── Parsear body ───────────────────────────────────────────────────────────
+  // ── Parsear body ────────────────────────────────────────────────────────────────────
   let body: ScanBody;
   try {
     body = await req.json();
@@ -59,11 +59,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
   }
 
-  // ── Generar scanId ─────────────────────────────────────────────────────────
+  // ── Generar scanId ───────────────────────────────────────────────────────────
   const scanId = randomUUID();
   const now = new Date();
 
-  // ── Upsert cada dispositivo ────────────────────────────────────────────────
+  // ── Upsert cada dispositivo ─────────────────────────────────────────────────────
   let upsertCount = 0;
   for (const device of devices) {
     if (!device.ip) continue;
@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Auto-registrar DVRs/NVRs detectados ───────────────────────────────────
+  // ── Auto-registrar DVRs/NVRs detectados ─────────────────────────────────────
   const dvrDevices = devices.filter(d => d.ip && d.deviceType === "dvr_nvr");
   let dvrCount = 0;
   for (const d of dvrDevices) {
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
             port:     80,
             channels: 8,
             name:     d.hostname ?? d.vendor ?? `DVR ${d.ip}`,
-            location: subnet ?? null,
+            address:  subnet ?? null,
             status:   "ONLINE",
             lastChecked: now,
           },
