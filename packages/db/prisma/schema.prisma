@@ -11,7 +11,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Tenants (Empresas) ───────────────────────────────────────────────────────
+// ─── Tenants (Empresas) ─────────────────────────────────────────────────────────────────
 
 model Tenant {
   id        String   @id @default(cuid())
@@ -34,7 +34,8 @@ model Tenant {
   dvrs            Dvr[]
   dvrCredential   DvrCredential?
   dvrScanJobs     DvrScanJob[]
-  agentTunnel     AgentTunnel?
+  agentTunnels    AgentTunnel[]     // antes: agentTunnel? (uno por tenant) — ahora uno por sede (Location)
+  locations       Location[]
   dvrAlarms       DvrAlarm[]
   emaps           EMap[]
   monitorTargets  MonitorTarget[]
@@ -43,7 +44,7 @@ model Tenant {
   @@map("tenants")
 }
 
-// ─── Usuarios ─────────────────────────────────────────────────────────────────
+// ─── Usuarios ──────────────────────────────────────────────────────────────────────────────
 
 model User {
   id        String   @id @default(cuid())
@@ -72,7 +73,7 @@ enum UserRole {
   USER   // usuario final que crea tickets
 }
 
-// ─── Tickets ──────────────────────────────────────────────────────────────────
+// ─── Tickets ────────────────────────────────────────────────────────────────────────────────
 
 model Ticket {
   id             String       @id @default(cuid())
@@ -101,17 +102,17 @@ model Ticket {
   solution       String?      // resultado / solución al cerrar
   slaDeadline    DateTime?    // fecha límite según prioridad
   slaBreached    Boolean      @default(false)
-  // ── Campos vista TI ──────────────────────────────────────────────────────────
+  // ── Campos vista TI ──────────────────────────────────────────────────────────────────────
   techCategory    String?     // categoría técnica TI
   affectedAsset   String?     // activo / CI afectado (texto libre)
   assignedGroup   String?     // grupo asignado (Mesa de ayuda, Campo, etc.)
   urgency         String?     // urgencia: LOW / MEDIUM / HIGH / CRITICAL
   diagnosis       String?     // causa / diagnóstico
-  // ── Campos vista usuario final ────────────────────────────────────────────────
+  // ── Campos vista usuario final ─────────────────────────────────────────────────────
   whatNeeded      String?     // ¿Qué necesitas? (lenguaje simple)
   affectedService String?     // equipo o servicio afectado (simple)
   createdFromUserView Boolean @default(false) // true si lo creó un usuario final
-  // ── Campos para tickets creados desde email ────────────────────────────────────
+  // ── Campos para tickets creados desde email ──────────────────────────────────────
   emailFrom      String?     // dirección de email del remitente
   emailMessageId String?     // Message-ID del email original (para deduplicación)
   groupId        String?
@@ -170,7 +171,7 @@ enum Priority {
   URGENT
 }
 
-// ─── Respuestas predefinidas ──────────────────────────────────────────────────
+// ─── Respuestas predefinidas ───────────────────────────────────────────────────────────
 
 model CannedResponse {
   id        String   @id @default(cuid())
@@ -185,7 +186,7 @@ model CannedResponse {
   @@map("canned_responses")
 }
 
-// ─── Adjuntos de Ticket ───────────────────────────────────────────────────────
+// ─── Adjuntos de Ticket ─────────────────────────────────────────────────────────────────
 
 model TicketAttachment {
   id        String   @id @default(cuid())
@@ -202,7 +203,7 @@ model TicketAttachment {
   @@map("ticket_attachments")
 }
 
-// ─── Mensajes de Ticket ───────────────────────────────────────────────────────
+// ─── Mensajes de Ticket ──────────────────────────────────────────────────────────────────
 
 model TicketMessage {
   id         String         @id @default(cuid())
@@ -226,7 +227,7 @@ enum MessageChannel {
   PHONE     // llamada (registro manual)
 }
 
-// ─── Activos / Inventario ─────────────────────────────────────────────────────
+// ─── Activos / Inventario ───────────────────────────────────────────────────────────────
 
 model Asset {
   id           String      @id @default(cuid())
@@ -289,7 +290,7 @@ enum AssetStatus {
   RETIRED
 }
 
-// ─── Categorías ───────────────────────────────────────────────────────────────
+// ─── Categorías ────────────────────────────────────────────────────────────────────────────
 
 model Category {
   id        String   @id @default(cuid())
@@ -308,7 +309,7 @@ model Category {
   @@map("categories")
 }
 
-// ─── Canales de Comunicación ──────────────────────────────────────────────────
+// ─── Canales de Comunicación ────────────────────────────────────────────────────────
 
 model Channel {
   id        String      @id @default(cuid())
@@ -333,7 +334,7 @@ enum ChannelType {
   TEAMS
 }
 
-// ─── Configuración del tenant ─────────────────────────────────────────────────
+// ─── Configuración del tenant ──────────────────────────────────────────────────────
 
 model TenantSettings {
   id              String   @id @default(cuid())
@@ -349,7 +350,7 @@ model TenantSettings {
   @@map("tenant_settings")
 }
 
-// ─── Grupos / Equipos ─────────────────────────────────────────────────────────
+// ─── Grupos / Equipos ─────────────────────────────────────────────────────────────────
 
 model Group {
   id          String   @id @default(cuid())
@@ -397,7 +398,7 @@ model UserInvitation {
   @@map("user_invitations")
 }
 
-// ─── Emails procesados (para deduplicación IMAP) ─────────────────────────────
+// ─── Emails procesados (para deduplicación IMAP) ──────────────────────────
 
 model ProcessedEmail {
   id        String   @id @default(cuid())
@@ -410,7 +411,7 @@ model ProcessedEmail {
   @@map("processed_emails")
 }
 
-// ─── Dispositivos de Red (Network Discovery) ──────────────────────────────────
+// ─── Dispositivos de Red (Network Discovery) ────────────────────────────────────
 
 model NetworkDevice {
   id          String   @id @default(cuid())
@@ -435,7 +436,7 @@ model NetworkDevice {
   @@map("network_devices")
 }
 
-// ─── Monitor (Zabbix-style LAN/WAN monitoring) ───────────────────────────────
+// ─── Monitor (Zabbix-style LAN/WAN monitoring) ─────────────────────────────
 
 model MonitorTarget {
   id          String    @id @default(cuid())
@@ -488,7 +489,7 @@ model MonitorCheck {
   @@map("monitor_checks")
 }
 
-// ─── DVRs / NVRs ─────────────────────────────────────────────────────────────
+// ─── DVRs / NVRs ───────────────────────────────────────────────────────────────────────────
 
 model DvrCredential {
   id        String @id @default(cuid())
@@ -506,6 +507,7 @@ model DvrCredential {
 model Dvr {
   id          String    @id @default(cuid())
   tenantId    String
+  locationId  String?                       // sede (Location) a la que pertenece; nullable durante la transición
   name        String                        // nombre descriptivo ej: "Sede Norte - Bodega"
   serial      String?                       // número de serie Dahua (para acceso remoto P2P)
   ip          String                        // IP pública (si tiene) o IP local como fallback
@@ -515,10 +517,10 @@ model Dvr {
   channels    Int       @default(8)         // 8 / 16 / 32
   username    String?                       // credencial propia (si es null usa la global)
   password    String?                       // cifrada con AES (si es null usa la global)
-  location    String?                       // sede / dirección
+  address     String?                       // texto libre de sede/dirección (antes se llamaba "location")
   notes       String?
   photoUrl    String?                       // foto de la sede / equipo (URL en R2)
-  // ── Info obtenida del dispositivo via SDK ────────────────────────────────
+  // ── Info obtenida del dispositivo via SDK ────────────────────────────────────
   deviceModel   String?                     // ej: "XVR5116H-4KL-I2"
   firmware      String?                     // ej: "V2.680.0000000.20"
   deviceType    String?                     // ej: "XVR", "NVR", "IPC"
@@ -530,12 +532,34 @@ model Dvr {
   updatedAt   DateTime  @updatedAt
 
   tenant     Tenant       @relation(fields: [tenantId], references: [id])
+  location   Location?    @relation(fields: [locationId], references: [id])
   alarms     DvrAlarm[]
   emapDevices EMapDevice[]
 
   @@unique([tenantId, ip])
   @@index([tenantId])
+  @@index([locationId])
   @@map("dvrs")
+}
+
+// ─── Sedes (capa entre Tenant y Dvr — 1 sede = 1 red física = 1 agente) ──────
+
+model Location {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String                        // ej: "Bogotá - Bodega Norte"
+  city      String?
+  hasVpn    Boolean  @default(false)      // true = comparte red con otras Location del mismo tenant vía VPN
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  dvrs        Dvr[]
+  agentTunnel AgentTunnel?
+
+  @@index([tenantId])
+  @@map("locations")
 }
 
 enum DvrStatus {
@@ -544,7 +568,7 @@ enum DvrStatus {
   UNKNOWN
 }
 
-// ─── E-Map (planos electrónicos) ─────────────────────────────────────────────
+// ─── E-Map (planos electrónicos) ────────────────────────────────────────────────
 
 model EMap {
   id        String      @id @default(cuid())
@@ -577,7 +601,7 @@ model EMapDevice {
   @@map("emap_devices")
 }
 
-// ─── Alarmas de DVR ──────────────────────────────────────────────────────────
+// ─── Alarmas de DVR ─────────────────────────────────────────────────────────────────────
 
 model DvrAlarm {
   id           String   @id @default(cuid())
@@ -601,11 +625,12 @@ model DvrAlarm {
   @@map("dvr_alarms")
 }
 
-// ─── Tunnel del agente local (go2rtc + cloudflared) ─────────────────────────
+// ─── Tunnel del agente local (go2rtc + cloudflared) ──────────────────────────
 
 model AgentTunnel {
   id                 String   @id @default(cuid())
-  tenantId           String   @unique
+  tenantId           String                         // denormalizado: se mantiene para filtros/validación directa por tenant sin join
+  locationId         String?  @unique              // antes: tenantId @unique — el túnel representa una red física (sede), no la empresa completa
   tunnelUrl          String                        // https://vms-<slug>.helpdeskos.co (heartbeat runtime)
   cloudflareTunnelId String?                        // ID del tunnel en Cloudflare (cfd_tunnel), null si aún no se creó
   hostname           String?                        // hostname público asignado, ej: vms-altra.helpdeskos.co
@@ -613,12 +638,14 @@ model AgentTunnel {
   isActive           Boolean  @default(true)
   createdAt          DateTime @default(now())
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  location Location? @relation(fields: [locationId], references: [id])
 
+  @@index([tenantId])
   @@map("agent_tunnels")
 }
 
-// ─── Trabajos de scan local de DVR ───────────────────────────────────────────
+// ─── Trabajos de scan local de DVR ────────────────────────────────────────────
 
 model DvrScanJob {
   id        String   @id @default(cuid())
@@ -639,7 +666,7 @@ model DvrScanJob {
   @@map("dvr_scan_jobs")
 }
 
-// ─── Tokens de reset de contraseña ───────────────────────────────────────────
+// ─── Tokens de reset de contraseña ────────────────────────────────────────────
 
 model PasswordResetToken {
   id        String   @id @default(cuid())
