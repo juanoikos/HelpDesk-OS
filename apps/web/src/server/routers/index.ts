@@ -8,6 +8,7 @@ import { reportsRouter } from "./reports";
 import { assetsRouter } from "./assets";
 import { networkDevicesRouter } from "./networkDevices";
 import { dvrsRouter } from "./dvrs";
+import { locationsRouter } from "./locations";
 import { monitoringRouter } from "./monitoring";
 import { vmsRouter } from "./vms";
 
@@ -21,6 +22,7 @@ export const appRouter = router({
   assets:          assetsRouter,
   networkDevices:  networkDevicesRouter,
   dvrs:            dvrsRouter,
+  locations:       locationsRouter,
   monitoring:      monitoringRouter,
   vms:             vmsRouter,
 });
