@@ -337,6 +337,7 @@ helpdesk-os/
 | **DvrScanJob** | Trabajos de búsqueda de grabaciones |
 | **AgentTunnel** | Tunnel de Cloudflare **por sede (Location)**, no por tenant (cambio 2026-07-29). `locationId` es único (antes era `tenantId`); `tenantId` se mantiene denormalizado para queries directas |
 | **DvrAlarm** | Alarmas recibidas del DVR (VideoMotion, VideoLoss, etc.) → crea ticket automático |
+| **Camera** (nuevo — 2026-07-30) | Estado VIGENTE por canal/cámara (no confundir con `DvrAlarm`, que es log histórico). Campos: `dvrId`, `channelNumber`, `isConnected`, `lastEventAt` (tiempo real), `lastCheckedAt` (chequeo activo) |
 
 ---
 
@@ -369,15 +370,48 @@ helpdesk-os/
 ### ✅ Migración completa (2026-07-29) — sin pendientes
 Los 12 archivos de código + schema + migración están en `master`. Ningún archivo usa ya el campo viejo `location` en `Dvr` — todo el sistema (DB, routers, endpoints de agente, alarm-handler, 3 páginas del dashboard) usa `address`/`locationId` de forma consistente.
 
-**Siguiente paso real (no una corrección, sino la próxima feature):** diseñar la UI de "Sedes" (crear/editar Location, asignar Dvr a una Location explícita en vez de la "Sede Principal" automática, mostrar estado online/offline agrupado por Location) y el heartbeat de estado (DVR en línea + cámaras conectadas) que se discutió pero aún no se implementó.
+---
+
+## Heartbeat de cámaras (Camera) — agregado 2026-07-30
+
+**Contexto:** ya existían dos mecanismos de monitoreo que nadie había conectado entre sí: `dvr-heartbeat.ts` (verifica cada 60s si el DVR completo está ONLINE/OFFLINE, corriendo en producción desde antes) y `dvr-events.ts` (suscriptor en tiempo real a `eventManager.cgi` de Dahua, captura eventos `VideoLoss`/`VideoMotion` por canal, pero solo los guardaba como log histórico en `DvrAlarm`). Faltaba el **estado vigente por cámara** — "¿está conectada *ahora*?", no solo "hubo un evento hace rato".
+
+**Diseño de dos capas (push + respaldo activo):**
+1. **Tiempo real (barato):** `alarm-handler.ts` ahora, en cada evento `VideoLoss` que ya recibía de `dvr-events.ts`, actualiza `Camera.isConnected` (Start = desconectada, Stop = reconectada) antes de aplicar el resto de su lógica de alarmas/tickets. No agrega carga nueva — es enganchar una escritura extra al pipe que ya corría.
+2. **Respaldo activo (`channel-heartbeat.ts`, nuevo servicio):** cada minuto revisa qué DVRs ya tienen su intervalo vencido (`TenantSettings.channelCheckIntervalMin`, default 5 min, **configurable desde la propia UI de DVRs**) y les hace un snapshot rápido por canal para confirmar que sigue viva — cubre canales que nunca emitieron un evento (arranque en frío) o firmwares que no reportan `VideoLoss` de forma confiable. **Optimización:** si una cámara ya tiene un evento de los últimos 60 minutos, se salta su snapshot ese ciclo (ya se sabe que está viva por el canal de eventos) — así el costo del respaldo no escala con el número de canales en operación normal.
+
+**UI:** en `/dvrs`, cada fila muestra puntitos verde/rojo por canal junto al conteo de "X ch" (tooltip con el número de canal), y hay un panel para ajustar el intervalo de chequeo en minutos sin tocar código.
+
+**Archivos:** `packages/db/prisma/schema.prisma` (modelo `Camera` + `TenantSettings.channelCheckIntervalMin` + `Dvr.lastChannelCheckAt`, migración aditiva `20260730000000_add_camera_status`), `apps/web/src/lib/channel-heartbeat.ts` (nuevo), `apps/web/src/lib/alarm-handler.ts`, `apps/web/src/server/routers/dvrs.ts` (`getChannelCheckInterval`/`setChannelCheckInterval` + `cameras` en `list()`), `apps/web/src/instrumentation.ts`, `apps/web/src/app/(dashboard)/dvrs/page.tsx`.
+
+**Validado antes de producción:** `tsc --noEmit` limpio, simulación manual del ciclo `VideoLoss Start→Stop` contra Postgres confirmando el flip de `isConnected`, y prueba del intervalo configurable.
+
+**Limitación conocida (documentada, no resuelta):** el respaldo activo sigue descargando un snapshot completo por canal para los canales que sí necesitan chequeo — intrascendente al volumen actual, pero si crece mucho la siguiente palanca es subir el intervalo default o cambiar a un método RPC2 más liviano que no jale imagen completa.
 
 ---
 
-## Pendientes (actualizado 2026-07-28)
+## UI de Sedes (Locations) — agregada 2026-07-30
+
+Completa el ciclo de la capa `Location` (que desde la migración de 2026-07-29 solo existía en el schema, con una "Sede Principal" automática por tenant vía `getOrCreateDefaultLocation`).
+
+**Qué se agregó:**
+- Router `apps/web/src/server/routers/locations.ts`: `list` (con conteo de DVRs total/online/offline y estado del `AgentTunnel` por sede), `create`, `update`, `delete` (borrar una sede **no borra** sus DVRs — quedan con `locationId: null`, gracias al `ON DELETE SET NULL` ya definido en la migración de Location).
+- Página nueva `/locations`: tabla de sedes con esos datos + modal de crear/editar + confirmación reforzada al eliminar si tiene DVRs asignados.
+- `dvrs.ts`: `locationId` agregado a `create`/`update`, y `location: { select: { id, name } }` incluido en `list()`.
+- `dvrs/page.tsx`: selector de Sede en el formulario "Agregar DVR" (con aviso si todavía no hay sedes creadas), badge 🏢 con el nombre de la sede en la lista, y link directo a `/locations`.
+- Nav principal (`layout.tsx`): entrada "🏢 Sedes" junto a "📹 DVRs".
+
+**Validado antes de producción:** `tsc --noEmit` limpio, prueba funcional completa (crear 2 sedes, asignar 2 DVRs a una, verificar conteos online/offline, borrar la sede y confirmar que el DVR queda sin sede en vez de eliminarse).
+
+**Con esto se cierra el roadmap de video/DVR planteado en sesiones anteriores:** Location (organización) + heartbeat de DVR (ya existía) + heartbeat de cámaras (Camera) + Live View (go2rtc, ya en producción) + la UI para administrar todo. Lo que sigue no es una corrección sino trabajo nuevo — ver Pendientes.
+
+---
+
+## Pendientes (actualizado 2026-07-30)
 
 ### 🔴 Alta Prioridad
 1. **`CLOUDFLARE_API_TOKEN` en Railway** — sin esto, `ensureTunnelForTenant()` falla en silencio y Live View queda desactivado (nada más se rompe). Crear en Cloudflare con permisos `Account.Cloudflare Tunnel: Edit` + `Zone.DNS: Edit`, scope solo sobre la zona `helpdeskos.co`. Juan Pablo debe crearlo y pegarlo él mismo (no delegado a Claude/automatización, por manejo de secretos).
-2. **Probar Live View con DVR Dahua físico real** — la automatización de tunnel por tenant y el agente ya están en producción, pero falta validar contra hardware real (sugerido: DVR de Camilo, IP `192.168.1.15`).
+2. **Probar Live View con DVR Dahua físico real** — la automatización de tunnel por tenant, el agente, y ahora el heartbeat de cámaras ya están en producción, pero falta validar todo el flujo end-to-end contra hardware real (sugerido: DVR de Camilo, IP `192.168.1.15`). Esto también valida por primera vez el chequeo activo de canales (`channel-heartbeat.ts`) contra un dispositivo real, no solo simulado.
 3. **Dominio Resend** — verificar `dyccomputersas.com` en Resend + DNS → emails a Camilo
 
 ### 🟠 Media Prioridad
@@ -406,6 +440,9 @@ Los 12 archivos de código + schema + migración están en `master`. Ningún arc
 ### Corregidos el 2026-07-29
 - **Capa de Location agregada** (ver sección dedicada arriba) — requirió renombrar `Dvr.location` → `Dvr.address` y mover `AgentTunnel` de `tenantId` único a `locationId` único. 10 de 12 archivos afectados ya corregidos en producción; quedan 2 archivos de solo display pendientes (ver sección de Location).
 - **Plan actual de Railway no tiene Backups/PITR** — confirmado en el dashboard (`Backups and point-in-time recovery (PITR) are only available for customers on the Pro plan`). Los respaldos manuales pre-migración deben hacerse con `pg_dump` local (versión igual o mayor a la del servidor — Postgres 18).
+
+### Agregado el 2026-07-30 (no es un bug, es feature nueva)
+- **Heartbeat de cámaras (`Camera`)** y **UI de Sedes (`/locations`)** — ver secciones dedicadas arriba. Cierra el roadmap completo de video/DVR: Location + heartbeat de DVR + heartbeat de cámaras + Live View + UI de gestión, todo conectado.
 
 ---
 
