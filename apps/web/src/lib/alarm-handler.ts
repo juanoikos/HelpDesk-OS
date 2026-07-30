@@ -11,7 +11,19 @@ import { uploadToR2 } from "./r2";
 import { assertNotSsrf } from "./dvr-crypto";
 import { randomUUID } from "crypto";
 
-// ─── Clasificación de eventos ───────────────────────────────────────────────────
+// ─── Estado vigente por cámara (2026-07-29) ──────────────────────────────────────
+// No confundir con DvrAlarm: eso es un log histórico de eventos, esto es el
+// estado ACTUAL de cada canal, consultado directo por la UI (dvrs.list).
+
+async function updateCameraStatus(dvrId: string, channelNumber: number, isConnected: boolean): Promise<void> {
+  await prisma.camera.upsert({
+    where:  { dvrId_channelNumber: { dvrId, channelNumber } },
+    create: { dvrId, channelNumber, isConnected, lastEventAt: new Date() },
+    update: { isConnected, lastEventAt: new Date() },
+  });
+}
+
+// ─── Clasificación de eventos ────────────────────────────────────────────────────────────
 
 export const EVENT_SEVERITY: Record<string, "critical" | "high" | "medium" | "low"> = {
   VideoLoss:              "critical",  // ← crea ticket
@@ -28,7 +40,7 @@ export const EVENT_SEVERITY: Record<string, "critical" | "high" | "medium" | "lo
 
 const AUTO_TICKET_CODES = new Set(["VideoLoss", "VideoBlind", "AlarmLocal"]);
 
-// ─── Tipos ─────────────────────────────────────────────────────────────────────
+// ─── Tipos ───────────────────────────────────────────────────────────────────────────────────
 
 export interface DahuaEvent {
   code:    string;
@@ -80,23 +92,34 @@ function notifySseClients(tenantId: string, alarm: object) {
   }
 }
 
-// ─── Procesamiento principal de alarma ─────────────────────────────────────────
+// ─── Procesamiento principal de alarma ─────────────────────────────────────────────
 
 export async function processAlarm(
   dvr: { id: string; name: string; tenantId: string; ip: string; port: number; localIp: string | null },
   creds: { username: string; password: string },
   event: DahuaEvent,
 ): Promise<void> {
-  // Ignorar heartbeats y Stop events
+  const channel = event.index + 1; // convertir a 1-based
+
+  // ── Estado vigente por cámara (independiente del resto de esta función) ─────
+  // VideoLoss Start = se desconectó; Stop = se recuperó. Esto es lo único que
+  // usamos para "¿está conectada ahora?" — VideoBlind no cuenta (la cámara
+  // sigue conectada, solo tapada/obstruida).
+  if (event.code === "VideoLoss") {
+    updateCameraStatus(dvr.id, channel, event.action !== "Start").catch(err =>
+      console.error(`[camera-status] Error actualizando CH${channel} de ${dvr.name}:`, err)
+    );
+  }
+
+  // Ignorar heartbeats y Stop events (para el resto: log de alarma, ticket, SSE)
   if (event.code === "Keepalive" || event.action === "Stop") return;
 
-  const channel = event.index + 1; // convertir a 1-based
   const dedupKey = `${dvr.id}_${channel}_${event.code}`;
   if (isDuplicate(dedupKey)) return;
 
   console.log(`[alarm] ${dvr.name} CH${channel} — ${event.code}`);
 
-  // ── Snapshot del canal afectado ──────────────────────────────────────────────
+  // ── Snapshot del canal afectado ────────────────────────────────────────────────
   let snapshotUrl: string | undefined;
   try {
     const ip   = dvr.localIp ?? dvr.ip;
@@ -119,7 +142,7 @@ export async function processAlarm(
     }
   } catch { /* snapshot falla → continuar sin foto */ }
 
-  // ── Guardar alarma en DB ───────────────────────────────────────────────
+  // ── Guardar alarma en DB ────────────────────────────────────────────────────────
   const alarm = await prisma.dvrAlarm.create({
     data: {
       tenantId:   dvr.tenantId,
@@ -145,7 +168,7 @@ export async function processAlarm(
     }
   }
 
-  // ── Notificar browsers via SSE ────────────────────────────────────────────────
+  // ── Notificar browsers via SSE ───────────────────────────────────────────────────
   notifySseClients(dvr.tenantId, {
     id:          alarm.id,
     dvrId:       dvr.id,
