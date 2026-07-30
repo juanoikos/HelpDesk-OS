@@ -46,6 +46,9 @@ export default async function DashboardLayout({
               <Link href="/dvrs" className="text-slate-400 hover:text-white hover:bg-slate-800 px-3 py-1.5 rounded-lg text-sm transition-colors">
                 📹 DVRs
               </Link>
+              <Link href="/locations" className="text-slate-400 hover:text-white hover:bg-slate-800 px-3 py-1.5 rounded-lg text-sm transition-colors">
+                🏢 Sedes
+              </Link>
               <Link href="/vms" className="text-slate-400 hover:text-white hover:bg-slate-800 px-3 py-1.5 rounded-lg text-sm transition-colors">
                 🎥 VMS
               </Link>
