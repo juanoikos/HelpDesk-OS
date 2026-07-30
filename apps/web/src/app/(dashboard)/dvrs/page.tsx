@@ -4,7 +4,7 @@ import { trpc } from "@/trpc/react";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "ONLINE")  return <span className="inline-flex items-center gap-1 text-xs font-medium text-green-400"><span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />Online</span>;
@@ -20,6 +20,7 @@ export default function DvrsPage() {
   const { data: cred }                     = trpc.dvrs.getCredential.useQuery();
   const { data: checkInterval }            = trpc.dvrs.getChannelCheckInterval.useQuery();
   const { data: netCandidates, isLoading: loadingNet } = trpc.dvrs.networkCandidates.useQuery();
+  const { data: locations } = trpc.locations.list.useQuery();
 
   // Estado modales
   const [showCred,      setShowCred]      = useState(false);
@@ -57,6 +58,7 @@ export default function DvrsPage() {
   const [newPort,      setNewPort]      = useState("80");
   const [newChannels,  setNewChannels]  = useState("8");
   const [newLocation,  setNewLocation]  = useState("");
+  const [newLocationId, setNewLocationId] = useState("");
   const [useOwnCred,   setUseOwnCred]   = useState(false);
   const [newUsername,  setNewUsername]  = useState("admin");
   const [newPassword,  setNewPassword]  = useState("");
@@ -192,7 +194,7 @@ export default function DvrsPage() {
       utils.dvrs.list.invalidate();
       setShowAdd(false);
       setNewName(""); setNewSerial(""); setNewIp(""); setNewLocalIp("");
-      setNewLocalPort("37777"); setNewPort("80"); setNewChannels("8"); setNewLocation("");
+      setNewLocalPort("37777"); setNewPort("80"); setNewChannels("8"); setNewLocation(""); setNewLocationId("");
       setUseOwnCred(false); setNewUsername("admin"); setNewPassword("");
       setNewPhotoFile(null); setNewPhotoPreview(null);
     },
@@ -262,6 +264,10 @@ export default function DvrsPage() {
           <p className="text-slate-400 text-sm mt-0.5">{dvrs?.length ?? 0} dispositivos registrados</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <Link href="/locations"
+            className="text-sm px-3 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors">
+            🏢 Sedes
+          </Link>
           <button onClick={() => setShowCred(true)}
             className={`text-sm px-3 py-2 rounded-lg border transition-colors ${cred ? "border-green-800 text-green-400 hover:bg-green-900/20" : "border-yellow-800 text-yellow-400 hover:bg-yellow-900/20"}`}>
             🔑 {cred ? "Credencial configurada" : "Configurar credencial"}
@@ -503,7 +509,22 @@ export default function DvrsPage() {
                   <option value="32">32 canales</option>
                 </select>
               </div>
-              <input value={newLocation} onChange={e => setNewLocation(e.target.value)} placeholder="Sede / Ubicación (opcional)"
+              <div>
+                <label className="text-slate-500 text-xs mb-1 block">Sede</label>
+                <select value={newLocationId} onChange={e => setNewLocationId(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                  <option value="">Sin sede asignada</option>
+                  {locations?.map(loc => (
+                    <option key={loc.id} value={loc.id}>{loc.name}</option>
+                  ))}
+                </select>
+                {!locations?.length && (
+                  <p className="text-slate-600 text-xs mt-1">
+                    No hay sedes creadas todavía — <Link href="/locations" className="text-blue-400 hover:text-blue-300">crear una</Link>.
+                  </p>
+                )}
+              </div>
+              <input value={newLocation} onChange={e => setNewLocation(e.target.value)} placeholder="Dirección / detalle (opcional)"
                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
 
               {/* Credenciales */}
@@ -565,6 +586,7 @@ export default function DvrsPage() {
                   port:      parseInt(newPort) || 80,
                   channels:  parseInt(newChannels) || 8,
                   address:   newLocation || undefined,
+                  locationId: newLocationId || undefined,
                   username:  useOwnCred && newUsername ? newUsername : undefined,
                   password:  useOwnCred && newPassword ? newPassword : undefined,
                 })}
@@ -719,7 +741,10 @@ export default function DvrsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <p className="text-white font-medium">{dvr.name}</p>
-                    {dvr.address && <p className="text-slate-500 text-xs">{dvr.address}</p>}
+                    {(dvr as { location?: { name: string } | null }).location && (
+                      <p className="text-slate-500 text-xs">🏢 {(dvr as { location: { name: string } }).location.name}</p>
+                    )}
+                    {dvr.address && <p className="text-slate-600 text-xs">{dvr.address}</p>}
                   </td>
                   <td className="px-4 py-3 text-xs space-y-1">
                     {dvr.serial && (
