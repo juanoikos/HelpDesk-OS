@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
-// ─── Componente playback HLS ──────────────────────────────────────────────────
+// ─── Componente playback HLS ───────────────────────────────────────────────────────────
 function PlaybackPlayer({ src, title, onClose }: { src: string; title: string; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [status, setStatus] = useState<"loading" | "playing" | "error">("loading");
@@ -56,7 +56,7 @@ function PlaybackPlayer({ src, title, onClose }: { src: string; title: string; o
   );
 }
 
-// ─── Timeline de grabaciones (SVG 24h) ────────────────────────────────────────
+// ─── Timeline de grabaciones (SVG 24h) ─────────────────────────────────────────────────
 function RecordingTimeline({
   recordings,
   date,
@@ -284,7 +284,7 @@ export default function DvrRecordingsPage() {
         <h1 className="text-2xl font-bold text-white">{dvr?.name ?? "DVR"}</h1>
         <p className="text-slate-400 text-sm mt-0.5">
           {dvr?.ip}:{dvr?.port} · {dvr?.channels} canales
-          {dvr?.location && ` · ${dvr.location}`}
+          {dvr?.address && ` · ${dvr.address}`}
         </p>
       </div>
 
