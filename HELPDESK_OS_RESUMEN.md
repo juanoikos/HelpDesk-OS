@@ -331,11 +331,44 @@ helpdesk-os/
 | Asset | Inventario de activos de hardware |
 | NetworkDevice | Dispositivos descubiertos en red |
 | ProcessedEmail | Deduplicación IMAP |
-| **Dvr** | DVR/NVR con serial, IPs, credenciales |
+| **Dvr** | DVR/NVR con serial, IPs, credenciales. Campo `address` (texto libre de sede, antes se llamaba `location`) + `locationId` opcional hacia `Location` |
+| **Location** (nuevo — 2026-07-29) | Sede física entre Tenant y Dvr/AgentTunnel. Campos: `name`, `city`, `hasVpn`, `isActive`. Ver sección "Capa de Location" abajo |
 | **DvrCredential** | Credencial global por tenant (cifrada) |
 | **DvrScanJob** | Trabajos de búsqueda de grabaciones |
-| **AgentTunnel** | Tunnel de Cloudflare por tenant para Live View (`cloudflareTunnelId`, `hostname`, heartbeat) |
+| **AgentTunnel** | Tunnel de Cloudflare **por sede (Location)**, no por tenant (cambio 2026-07-29). `locationId` es único (antes era `tenantId`); `tenantId` se mantiene denormalizado para queries directas |
 | **DvrAlarm** | Alarmas recibidas del DVR (VideoMotion, VideoLoss, etc.) → crea ticket automático |
+
+---
+
+## Capa de Location (Sede) — agregada 2026-07-29
+
+**Por qué:** un cliente puede tener muchas sedes (Bogotá y fuera de ella) cada una con su propia DVR y su propia red física. Antes `Dvr` y `AgentTunnel` colgaban directo de `Tenant`, lo cual no alcanzaba para: (a) saber en línea/fuera de línea cada DVR por sede, (b) permitir Live View puntual sin cargar todas las sedes, (c) manejar clientes con VPN (una sola red lógica) vs. clientes sin VPN (una red física por sede, un agente por sede).
+
+**Modelo:** `Tenant → Location → Dvr → (Camera futura)`. `AgentTunnel` ahora cuelga de `Location` (antes de `Tenant`).
+
+**Migración aplicada en producción** (`20260729213000_add_location_layer`): crea tabla `locations`, renombra `dvrs.location` → `dvrs.address` (con `RENAME COLUMN`, no pierde datos), agrega `locationId` nullable en `dvrs` y `agent_tunnels`, hace backfill de una Location "Sede Principal" por cada tenant que ya tuviera un Dvr o AgentTunnel, y mueve el unique constraint de `AgentTunnel` de `tenantId` a `locationId`. **Validada en sandbox local con Postgres 16 antes de aplicar** (datos preservados, sin pérdida).
+
+**Puente temporal (`getOrCreateDefaultLocation`):** mientras no exista UI para crear varias sedes por tenant, `cloudflare.ts` y `tunnel-register/route.ts` crean/usan automáticamente una Location "Sede Principal" por tenant. El día que se construya la UI de sedes, esta función deja de usarse y el caller pasa el `locationId` explícito que el usuario elija.
+
+**Backup pre-migración:** Juan Pablo corrió `pg_dump` (Postgres 18, coincide con la versión de Railway) contra producción antes de aplicar — archivo `pre-migration-location-layer-2026-07-29.sql`, verificado con 26 `CREATE TABLE` (coincide con los 25 modelos + `_prisma_migrations`).
+
+### Archivos ya corregidos en producción (rename location→address, findFirst en vez de findUnique para AgentTunnel, locationId en vez de tenantId)
+- ✅ `packages/db/prisma/schema.prisma`
+- ✅ `packages/db/prisma/migrations/20260729213000_add_location_layer/migration.sql`
+- ✅ `apps/web/src/server/routers/dvrs.ts` (era el más urgente — sin este fix el CRUD de DVRs estaba roto en prod)
+- ✅ `apps/web/src/server/routers/vms.ts`
+- ✅ `apps/web/src/lib/cloudflare.ts` (agrega `getOrCreateDefaultLocation`)
+- ✅ `apps/web/src/app/api/agent/tunnel-register/route.ts`
+- ✅ `apps/web/src/app/api/vms/stream/[...slug]/route.ts`
+- ✅ `apps/web/src/lib/alarm-handler.ts`
+- ✅ `apps/web/src/app/api/agent/network-scan/route.ts`
+- ✅ `apps/web/src/app/(dashboard)/vms/page.tsx`
+
+### ⚠️ Pendiente — solo cosmético, no rompe nada (display de `dvr.location` en vez de `dvr.address`)
+- ❌ `apps/web/src/app/(dashboard)/dvrs/[id]/page.tsx` — línea ~287, cambiar `dvr?.location` → `dvr?.address`
+- ❌ `apps/web/src/app/(dashboard)/dvrs/page.tsx` (49KB, el más grande) — 4 lugares: filtro de búsqueda (`d.location` → `d.address`), parseo de import CSV (variable local `location` → mandar como `address:` en el push), formulario de creación (`location: newLocation` → `address: newLocation`), display de la lista (`dvr.location` → `dvr.address`)
+
+**Siguiente paso de la próxima sesión:** terminar esos 2 archivos (son solo texto/nombres de campo, no lógica), luego diseñar la UI de "Sedes" (crear/editar Location, asignar Dvr a una Location, mostrar estado online/offline por Location) y el heartbeat de estado (DVR en línea + cámaras conectadas) que se discutió pero aún no se implementó.
 
 ---
 
@@ -368,6 +401,10 @@ helpdesk-os/
 ### Corregidos el 2026-07-28
 - **`pg_dump` versión incorrecta en backups:** el workflow de backups usaba `pg_dump` v16 de Ubuntu contra un Postgres v18 de Railway → fallaba en silencio (el pipe con `gzip` ocultaba el error, subía un backup vacío/corrupto con el step en verde). Corregido usando `docker run postgres:18 pg_dump` + `pipefail` + verificación de tamaño.
 - **`tunnel-register` rechazaba el hostname nuevo:** el endpoint `POST /api/agent/tunnel-register` solo aceptaba URLs `*.trycloudflare.com` — al migrar a tunnels autenticados con hostname fijo (`*.helpdeskos.co`), el heartbeat del agente fallaba con 400 en silencio (capturado por un `try/catch` en `TunnelService.cs`) y `vmsRouter.status` nunca marcaba el tunnel como activo. Corregido para aceptar ambos formatos.
+
+### Corregidos el 2026-07-29
+- **Capa de Location agregada** (ver sección dedicada arriba) — requirió renombrar `Dvr.location` → `Dvr.address` y mover `AgentTunnel` de `tenantId` único a `locationId` único. 10 de 12 archivos afectados ya corregidos en producción; quedan 2 archivos de solo display pendientes (ver sección de Location).
+- **Plan actual de Railway no tiene Backups/PITR** — confirmado en el dashboard (`Backups and point-in-time recovery (PITR) are only available for customers on the Pro plan`). Los respaldos manuales pre-migración deben hacerse con `pg_dump` local (versión igual o mayor a la del servidor — Postgres 18).
 
 ---
 
