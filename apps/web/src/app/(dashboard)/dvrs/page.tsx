@@ -4,7 +4,7 @@ import { trpc } from "@/trpc/react";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "ONLINE")  return <span className="inline-flex items-center gap-1 text-xs font-medium text-green-400"><span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />Online</span>;
@@ -12,7 +12,7 @@ function StatusBadge({ status }: { status: string }) {
   return <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500"><span className="w-1.5 h-1.5 rounded-full bg-slate-600" />Sin verificar</span>;
 }
 
-// ─── Página ───────────────────────────────────────────────────────────────────
+// ─── Página ─────────────────────────────────────────────────────────────────────────────────
 
 export default function DvrsPage() {
   const utils = trpc.useUtils();
@@ -216,7 +216,7 @@ export default function DvrsPage() {
 
   const filtered = (dvrs ?? []).filter(d =>
     !search || d.name.toLowerCase().includes(search.toLowerCase()) ||
-    d.ip.includes(search) || (d.location ?? "").toLowerCase().includes(search.toLowerCase())
+    d.ip.includes(search) || (d.address ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
   const online  = dvrs?.filter(d => d.status === "ONLINE").length  ?? 0;
@@ -228,12 +228,12 @@ export default function DvrsPage() {
     const reader = new FileReader();
     reader.onload = (e) => {
       const lines = (e.target?.result as string).split("\n").map(l => l.trim()).filter(Boolean);
-      const rows: { name: string; ip: string; port: number; channels: number; location?: string }[] = [];
+      const rows: { name: string; ip: string; port: number; channels: number; address?: string }[] = [];
       for (const line of lines) {
         if (line.startsWith("nombre") || line.startsWith("name")) continue; // header
         const [name, ip, port, channels, location] = line.split(",").map(s => s.trim().replace(/^"|"$/g, ""));
         if (!name || !ip) continue;
-        rows.push({ name, ip, port: parseInt(port ?? "80") || 80, channels: parseInt(channels ?? "8") || 8, location });
+        rows.push({ name, ip, port: parseInt(port ?? "80") || 80, channels: parseInt(channels ?? "8") || 8, address: location });
       }
       if (rows.length === 0) { alert("No se encontraron filas válidas en el CSV"); return; }
       bulkImport.mutate(rows);
@@ -552,7 +552,7 @@ export default function DvrsPage() {
                   localPort: parseInt(newLocalPort) || 37777,
                   port:      parseInt(newPort) || 80,
                   channels:  parseInt(newChannels) || 8,
-                  location:  newLocation || undefined,
+                  address:   newLocation || undefined,
                   username:  useOwnCred && newUsername ? newUsername : undefined,
                   password:  useOwnCred && newPassword ? newPassword : undefined,
                 })}
@@ -683,7 +683,7 @@ export default function DvrsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <p className="text-white font-medium">{dvr.name}</p>
-                    {dvr.location && <p className="text-slate-500 text-xs">{dvr.location}</p>}
+                    {dvr.address && <p className="text-slate-500 text-xs">{dvr.address}</p>}
                   </td>
                   <td className="px-4 py-3 text-xs space-y-1">
                     {dvr.serial && (
