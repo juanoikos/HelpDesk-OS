@@ -342,6 +342,7 @@ model TenantSettings {
   userViewConfig  Json     @default("{}")
   agentViewConfig Json     @default("{}")
   agentToken      String?  // unique token for agent authentication
+  channelCheckIntervalMin Int @default(5) // minutos entre chequeos activos de cámaras (respaldo del heartbeat en tiempo real)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -350,7 +351,7 @@ model TenantSettings {
   @@map("tenant_settings")
 }
 
-// ─── Grupos / Equipos ─────────────────────────────────────────────────────────────────
+// ─── Grupos / Equipos ──────────────────────────────────────────────────────────────────────────────
 
 model Group {
   id          String   @id @default(cuid())
@@ -528,6 +529,7 @@ model Dvr {
   lastInfoFetch DateTime?                   // última vez que se obtuvo info del SDK
   status      DvrStatus @default(UNKNOWN)
   lastChecked DateTime?
+  lastChannelCheckAt DateTime? // último chequeo activo de canales (channel-heartbeat.ts) — para respetar el intervalo configurable
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -535,11 +537,33 @@ model Dvr {
   location   Location?    @relation(fields: [locationId], references: [id])
   alarms     DvrAlarm[]
   emapDevices EMapDevice[]
+  cameras    Camera[]
 
   @@unique([tenantId, ip])
   @@index([tenantId])
   @@index([locationId])
   @@map("dvrs")
+}
+
+// ─── Estado actual por cámara/canal (2026-07-29) ──────────────────────────
+// Complementa DvrAlarm (que es un log histórico de eventos): esta tabla guarda
+// el estado VIGENTE de cada canal, actualizado en tiempo real por eventos
+// VideoLoss/VideoMotion (dvr-events.ts) y respaldado por un chequeo activo
+// periódico (channel-heartbeat.ts) para canales que nunca emitieron un evento.
+model Camera {
+  id            String    @id @default(cuid())
+  dvrId         String
+  channelNumber Int
+  isConnected   Boolean   @default(true) // asume conectada hasta la primera evidencia en contra
+  lastEventAt   DateTime?                // último evento VideoLoss/Stop recibido (tiempo real)
+  lastCheckedAt DateTime?                // último chequeo activo (snapshot) exitoso o fallido
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  dvr Dvr @relation(fields: [dvrId], references: [id], onDelete: Cascade)
+
+  @@unique([dvrId, channelNumber])
+  @@map("cameras")
 }
 
 // ─── Sedes (capa entre Tenant y Dvr — 1 sede = 1 red física = 1 agente) ──────
