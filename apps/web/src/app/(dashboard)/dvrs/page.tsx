@@ -4,7 +4,7 @@ import { trpc } from "@/trpc/react";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "ONLINE")  return <span className="inline-flex items-center gap-1 text-xs font-medium text-green-400"><span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />Online</span>;
@@ -18,6 +18,7 @@ export default function DvrsPage() {
   const utils = trpc.useUtils();
   const { data: dvrs,      isLoading }     = trpc.dvrs.list.useQuery();
   const { data: cred }                     = trpc.dvrs.getCredential.useQuery();
+  const { data: checkInterval }            = trpc.dvrs.getChannelCheckInterval.useQuery();
   const { data: netCandidates, isLoading: loadingNet } = trpc.dvrs.networkCandidates.useQuery();
 
   // Estado modales
@@ -35,6 +36,17 @@ export default function DvrsPage() {
   const [credUser, setCredUser] = useState("admin");
   const [credPass, setCredPass] = useState("");
   const [credOk,   setCredOk]   = useState(false);
+
+  // Intervalo de chequeo activo de cámaras
+  const [intervalInput, setIntervalInput] = useState("5");
+  const [intervalSaved, setIntervalSaved] = useState(false);
+  useEffect(() => {
+    if (checkInterval) setIntervalInput(String(checkInterval.minutes));
+  }, [checkInterval]);
+  const setInterval_ = trpc.dvrs.setChannelCheckInterval.useMutation({
+    onSuccess: () => { setIntervalSaved(true); setTimeout(() => setIntervalSaved(false), 2000); },
+    onError:   (e) => alert(e.message),
+  });
 
   // Form nuevo DVR
   const [newName,      setNewName]      = useState("");
@@ -627,6 +639,30 @@ export default function DvrsPage() {
         </div>
       </div>
 
+      {/* Panel: intervalo de chequeo de cámaras */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 mb-6">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h2 className="text-white font-semibold mb-1">📷 Chequeo de cámaras</h2>
+            <p className="text-slate-400 text-sm">
+              Cada cuántos minutos se verifica activamente que cada cámara siga transmitiendo (respaldo del estado en tiempo real).
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <input type="number" min={1} max={120} value={intervalInput}
+              onChange={e => setIntervalInput(e.target.value)}
+              className="w-20 bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:border-blue-500" />
+            <span className="text-slate-500 text-sm">min</span>
+            <button
+              onClick={() => setInterval_.mutate({ minutes: parseInt(intervalInput) || 5 })}
+              disabled={setInterval_.isPending}
+              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition-colors">
+              {setInterval_.isPending ? "Guardando…" : intervalSaved ? "✅ Guardado" : "Guardar"}
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Búsqueda */}
       <div className="relative mb-4">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">🔍</span>
@@ -696,7 +732,19 @@ export default function DvrsPage() {
                       <div className="font-mono text-slate-500">{dvr.ip}:{dvr.port}</div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-slate-400 text-xs">{dvr.channels} ch</td>
+                  <td className="px-4 py-3 text-slate-400 text-xs">
+                    <div>{dvr.channels} ch</div>
+                    {(dvr as { cameras?: { channelNumber: number; isConnected: boolean }[] }).cameras &&
+                      (dvr as { cameras: { channelNumber: number; isConnected: boolean }[] }).cameras.length > 0 && (
+                      <div className="flex gap-0.5 mt-1 flex-wrap max-w-[90px]">
+                        {(dvr as { cameras: { channelNumber: number; isConnected: boolean }[] }).cameras.map(c => (
+                          <span key={c.channelNumber}
+                            title={`Canal ${c.channelNumber}: ${c.isConnected ? "conectada" : "desconectada"}`}
+                            className={`w-1.5 h-1.5 rounded-full ${c.isConnected ? "bg-green-500" : "bg-red-500"}`} />
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3"><StatusBadge status={dvr.status} /></td>
                   <td className="px-4 py-3 text-slate-600 text-xs">
                     {dvr.lastChecked ? new Date(dvr.lastChecked).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" }) : "—"}
