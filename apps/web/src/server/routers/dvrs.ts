@@ -5,11 +5,11 @@ import { TRPCError } from "@trpc/server";
 import { fetchDeviceInfo, DahuaRPC2Client } from "@helpdesk-os/dahua-sdk";
 import { encrypt, decrypt } from "@/lib/dvr-crypto";
 
-// â”€â”€â”€ Router â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€ Router â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const dvrsRouter = router({
 
-  // â”€â”€ Credencial global del tenant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ Credencial global del tenant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   getCredential: adminProcedure.query(async ({ ctx }) => {
     const cred = await prisma.dvrCredential.findUnique({
       where: { tenantId: ctx.session.user.tenantId },
@@ -32,7 +32,7 @@ export const dvrsRouter = router({
       });
     }),
 
-  // ── Intervalo del chequeo activo de cámaras (channel-heartbeat.ts) ──────────
+  // ── Intervalo del chequeo activo de cámaras (channel-heartbeat.ts) ───────────
   getChannelCheckInterval: adminProcedure.query(async ({ ctx }) => {
     const settings = await prisma.tenantSettings.findUnique({
       where:  { tenantId: ctx.session.user.tenantId },
@@ -53,7 +53,7 @@ export const dvrsRouter = router({
       return { minutes: input.minutes };
     }),
 
-  // â”€â”€ CRUD DVRs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ CRUD DVRs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   list: adminProcedure.query(async ({ ctx }) => {
     return prisma.dvr.findMany({
       where:   { tenantId: ctx.session.user.tenantId },
@@ -73,6 +73,7 @@ export const dvrsRouter = router({
           select: { channelNumber: true, isConnected: true, lastEventAt: true, lastCheckedAt: true },
           orderBy: { channelNumber: "asc" },
         },
+        location: { select: { id: true, name: true } },
       },
     });
   }),
@@ -89,6 +90,7 @@ export const dvrsRouter = router({
       username:  z.string().optional(),
       password:  z.string().optional(),
       address:   z.string().max(100).optional(),
+      locationId: z.string().optional(),
       notes:     z.string().max(300).optional(),
       photoUrl:  z.string().url().optional(),
     }))
@@ -117,6 +119,7 @@ export const dvrsRouter = router({
       username:  z.string().optional().nullable(),
       password:  z.string().optional().nullable(),
       address:   z.string().max(100).optional().nullable(),
+      locationId: z.string().optional().nullable(),
       notes:     z.string().max(300).optional().nullable(),
       photoUrl:  z.string().url().optional().nullable(),
     }))
@@ -178,7 +181,7 @@ export const dvrsRouter = router({
     }));
   }),
 
-  // â”€â”€ Importaciâ€Ã³n masiva por CSV/JSON â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ Importaciâ€Ã³n masiva por CSV/JSON â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   bulkImport: adminProcedure
     .input(z.array(z.object({
       name:     z.string().min(1),
@@ -208,7 +211,7 @@ export const dvrsRouter = router({
       return { created: toCreate.length, skipped };
     }),
 
-  // â”€â”€ Verificar conectividad de un DVR (auto-detecta puerto) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ Verificar conectividad de un DVR (auto-detecta puerto) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   checkStatus: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
@@ -256,7 +259,7 @@ export const dvrsRouter = router({
     return { total: dvrs.length, online, offline };
   }),
 
-  // â”€â”€ Buscar grabaciones en un DVR (Dahua HTTP API) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ Buscar grabaciones en un DVR (Dahua HTTP API) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // channels: array de canales (vacâ€Ío = todos)
   findRecordings: adminProcedure
     .input(z.object({
@@ -431,7 +434,7 @@ export const dvrsRouter = router({
       }
     }),
 
-  // â”€â”€ Crear job de scan local â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ Crear job de scan local â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   createScanJob: adminProcedure
     .input(z.object({
       dvrId:     z.string(),
@@ -464,7 +467,7 @@ export const dvrsRouter = router({
       return { jobId: job.id };
     }),
 
-  // â”€â”€ Consultar resultado de un job â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ Consultar resultado de un job â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   getScanJob: protectedProcedure
     .input(z.object({ jobId: z.string() }))
     .query(async ({ input, ctx }) => {
@@ -480,7 +483,7 @@ export const dvrsRouter = router({
     }),
 });
 
-// â”€â”€â”€ Auto-detecciâ€Ã³n de puerto â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€ Auto-detecciâ€Ã³n de puerto â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // Puertos HTTP que usan los DVRs/NVRs Dahua e Hikvision, en orden de preferencia
 const DVR_PORTS = [80, 8080, 8000, 443, 8443, 9000, 81, 82];
@@ -506,7 +509,7 @@ async function probePort(ip: string, currentPort: number): Promise<{ port: numbe
   return { port: null };
 }
 
-// â”€â”€â”€ Helpers Dahua â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€ Helpers Dahua â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function buildDigestAuth(username: string, password: string): string {
   // Basic auth como primer intento (Dahua acepta ambos)
