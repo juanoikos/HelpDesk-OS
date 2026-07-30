@@ -4,7 +4,7 @@ import { trpc } from "@/trpc/react";
 import { useState } from "react";
 import Link from "next/link";
 
-// ─── Badges ──────────────────────────────────────────────────────────────────
+// ─── Badges ────────────────────────────────────────────────────────────────────────────────
 
 function StatusDot({ status }: { status: string }) {
   if (status === "ONLINE")
@@ -14,7 +14,7 @@ function StatusDot({ status }: { status: string }) {
   return <span className="flex items-center gap-1.5 text-xs text-slate-500 font-medium"><span className="w-2 h-2 rounded-full bg-slate-600" />Sin verificar</span>;
 }
 
-// ─── Página ───────────────────────────────────────────────────────────────────
+// ─── Página ──────────────────────────────────────────────────────────────────────────
 
 export default function VmsPage() {
   const utils = trpc.useUtils();
@@ -176,7 +176,7 @@ export default function VmsPage() {
                 <div className="p-4 space-y-3">
                   <div>
                     <p className="text-white font-semibold">{dvr.name}</p>
-                    {dvr.location && <p className="text-slate-500 text-xs">{dvr.location}</p>}
+                    {dvr.address && <p className="text-slate-500 text-xs">{dvr.address}</p>}
                   </div>
 
                   {/* Datos del dispositivo */}
