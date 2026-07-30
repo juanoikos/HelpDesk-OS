@@ -158,11 +158,23 @@ private async Task EnsureGo2rtcAsync(CancellationToken ct)
 var exe = Path.Combine(_dir, "go2rtc.exe");
 if (File.Exists(exe)) return;
 
+// Desde 2025 go2rtc deja de publicar el .exe suelto; ahora viene empaquetado
+// en go2rtc_win64.zip (ver https://github.com/AlexxIT/go2rtc/releases).
 Log("Descargando go2rtc...");
+var zipPath = Path.Combine(_dir, "go2rtc_win64.zip");
+try
+{
 using var http = new HttpClient();
 var bytes = await http.GetByteArrayAsync(
-"https://github.com/AlexxIT/go2rtc/releases/latest/download/go2rtc_win64.exe", ct);
-await File.WriteAllBytesAsync(exe, bytes, ct);
+"https://github.com/AlexxIT/go2rtc/releases/latest/download/go2rtc_win64.zip", ct);
+await File.WriteAllBytesAsync(zipPath, bytes, ct);
+
+System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, _dir, overwriteFiles: true);
+}
+finally
+{
+if (File.Exists(zipPath)) File.Delete(zipPath);
+}
 }
 
 private async Task EnsureCloudflaredAsync(CancellationToken ct)
