@@ -363,12 +363,13 @@ helpdesk-os/
 - ✅ `apps/web/src/lib/alarm-handler.ts`
 - ✅ `apps/web/src/app/api/agent/network-scan/route.ts`
 - ✅ `apps/web/src/app/(dashboard)/vms/page.tsx`
+- ✅ `apps/web/src/app/(dashboard)/dvrs/[id]/page.tsx`
+- ✅ `apps/web/src/app/(dashboard)/dvrs/page.tsx` (el último, 864 líneas — filtro de búsqueda, import CSV, formulario de creación, display de la lista)
 
-### ⚠️ Pendiente — solo cosmético, no rompe nada (display de `dvr.location` en vez de `dvr.address`)
-- ❌ `apps/web/src/app/(dashboard)/dvrs/[id]/page.tsx` — línea ~287, cambiar `dvr?.location` → `dvr?.address`
-- ❌ `apps/web/src/app/(dashboard)/dvrs/page.tsx` (49KB, el más grande) — 4 lugares: filtro de búsqueda (`d.location` → `d.address`), parseo de import CSV (variable local `location` → mandar como `address:` en el push), formulario de creación (`location: newLocation` → `address: newLocation`), display de la lista (`dvr.location` → `dvr.address`)
+### ✅ Migración completa (2026-07-29) — sin pendientes
+Los 12 archivos de código + schema + migración están en `master`. Ningún archivo usa ya el campo viejo `location` en `Dvr` — todo el sistema (DB, routers, endpoints de agente, alarm-handler, 3 páginas del dashboard) usa `address`/`locationId` de forma consistente.
 
-**Siguiente paso de la próxima sesión:** terminar esos 2 archivos (son solo texto/nombres de campo, no lógica), luego diseñar la UI de "Sedes" (crear/editar Location, asignar Dvr a una Location, mostrar estado online/offline por Location) y el heartbeat de estado (DVR en línea + cámaras conectadas) que se discutió pero aún no se implementó.
+**Siguiente paso real (no una corrección, sino la próxima feature):** diseñar la UI de "Sedes" (crear/editar Location, asignar Dvr a una Location explícita en vez de la "Sede Principal" automática, mostrar estado online/offline agrupado por Location) y el heartbeat de estado (DVR en línea + cámaras conectadas) que se discutió pero aún no se implementó.
 
 ---
 
