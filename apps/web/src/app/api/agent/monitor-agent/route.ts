@@ -108,33 +108,36 @@ function Invoke-Check {
                 $timeoutVal = if ($Target.timeout) { $Target.timeout } else { 5000 }
                 $timeout = [int]([math]::Max(1, [math]::Ceiling($timeoutVal / 1000)))
                 try {
-                    # Ignorar errores de certificado SSL en checks internos
-                    Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
-                    $handler = New-Object System.Net.Http.HttpClientHandler
-                    $handler.ServerCertificateCustomValidationCallback = { $true }
-                    $client = New-Object System.Net.Http.HttpClient($handler)
-                    $client.Timeout = [TimeSpan]::FromSeconds($timeout)
-
-                    $response = $client.GetAsync($url).GetAwaiter().GetResult()
+                    # Invoke-WebRequest (sincrono) en vez de HttpClient async: ver nota
+                    # en el scriptBlock paralelo mas abajo sobre el deadlock en runspaces.
+                    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+                    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls
+                    $response = Invoke-WebRequest -Uri $url -Method Get -TimeoutSec $timeout -UseBasicParsing -ErrorAction Stop
                     $elapsed  = [int]((Get-Date) - $start).TotalMilliseconds
 
                     $result.httpStatus = [int]$response.StatusCode
                     $result.latency    = $elapsed
                     $result.status     = if ([int]$response.StatusCode -lt 500) { "up" } else { "down" }
                     if ($result.status -eq "down") { $result.error = "HTTP $($response.StatusCode)" }
-
-                    $client.Dispose()
-                    $handler.Dispose()
-                } catch {
+                } catch [System.Net.WebException] {
                     $elapsed = [int]((Get-Date) - $start).TotalMilliseconds
-                    if ($_.Exception.Message -match "timeout|cancel") {
+                    $webResp = $_.Exception.Response
+                    if ($webResp) {
+                        $status = [int]$webResp.StatusCode
+                        $result.httpStatus = $status
+                        $result.latency    = $elapsed
+                        $result.status     = if ($status -lt 500) { "up" } else { "down" }
+                        if ($result.status -eq "down") { $result.error = "HTTP $status" }
+                    } elseif ($_.Exception.Message -match "timed out|tiempo de espera") {
                         $result.status = "timeout"
                         $result.error  = "Timeout"
                     } else {
                         $result.status = "down"
-                        $innerMsg = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { $null }
-                        $result.error = if ($innerMsg) { $innerMsg } else { $_.Exception.Message }
+                        $result.error  = $_.Exception.Message
                     }
+                } catch {
+                    $result.status = if ($_.Exception.Message -match "timeout|timed out|tiempo de espera") { "timeout" } else { "down" }
+                    $result.error  = $_.Exception.Message
                 }
             }
 
@@ -209,22 +212,38 @@ while ($true) {
                         $timeoutVal = if ($Target.timeout) { $Target.timeout } else { 5000 }
                         $timeout = [int]([math]::Max(1, [math]::Ceiling($timeoutVal / 1000)))
                         try {
-                            Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
-                            $handler = New-Object System.Net.Http.HttpClientHandler
-                            $handler.ServerCertificateCustomValidationCallback = { $true }
-                            $client  = New-Object System.Net.Http.HttpClient($handler)
-                            $client.Timeout = [TimeSpan]::FromSeconds($timeout)
-                            $response = $client.GetAsync($url).GetAwaiter().GetResult()
+                            # Nota: se usa Invoke-WebRequest (sincrono) en vez de HttpClient async.
+                            # HttpClient.GetAsync().GetAwaiter().GetResult() se cuelga de forma
+                            # consistente al ejecutarse dentro de un runspace de un RunspacePool
+                            # (deadlock clasico de async/await en PowerShell), lo que hacia que
+                            # TODOS los checks HTTP/HTTPS fallaran con "Se cancelo una tarea"
+                            # sin importar el dispositivo.
+                            [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+                            [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls
+                            $response = Invoke-WebRequest -Uri $url -Method Get -TimeoutSec $timeout -UseBasicParsing -ErrorAction Stop
                             $elapsed  = [int]((Get-Date)-$start).TotalMilliseconds
                             $result.httpStatus = [int]$response.StatusCode
                             $result.latency    = $elapsed
                             $result.status     = if ([int]$response.StatusCode -lt 500) { "up" } else { "down" }
                             if ($result.status -eq "down") { $result.error = "HTTP $($response.StatusCode)" }
-                            $client.Dispose(); $handler.Dispose()
+                        } catch [System.Net.WebException] {
+                            $elapsed = [int]((Get-Date)-$start).TotalMilliseconds
+                            $webResp = $_.Exception.Response
+                            if ($webResp) {
+                                # El dispositivo SI respondio (ej. 401/403/404) -> esta en linea
+                                $status = [int]$webResp.StatusCode
+                                $result.httpStatus = $status
+                                $result.latency    = $elapsed
+                                $result.status     = if ($status -lt 500) { "up" } else { "down" }
+                                if ($result.status -eq "down") { $result.error = "HTTP $status" }
+                            } elseif ($_.Exception.Message -match "timed out|tiempo de espera") {
+                                $result.status = "timeout"; $result.error = "Timeout"
+                            } else {
+                                $result.status = "down"; $result.error = $_.Exception.Message
+                            }
                         } catch {
-                            $result.status = if ($_.Exception.Message -match "timeout|cancel") { "timeout" } else { "down" }
-                            $innerMsg = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { $null }
-                            $result.error = if ($innerMsg) { $innerMsg } else { $_.Exception.Message }
+                            $result.status = if ($_.Exception.Message -match "timeout|timed out|tiempo de espera") { "timeout" } else { "down" }
+                            $result.error = $_.Exception.Message
                         }
                     }
                 }
